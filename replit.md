@@ -4,6 +4,19 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+## App: 模考错题分析工具 (`artifacts/exam-analyzer`)
+
+A teacher exam analysis tool at `/` with three pages:
+- **解析页面** — Paste HTML or JSON (from bookmarklet) to extract student wrong answers
+- **书签工具** — Draggable bookmarklet that runs on the logged-in teacher page to extract score data
+- **题型设置** — Configure question number → question type mappings (saved to DB)
+
+Features:
+- HTML parsing: POST /api/exam/parse
+- JSON bookmarklet import mode (client-side parsing, no API needed)
+- CSV export: POST /api/exam/export-csv (includes question type labels if configured)
+- Question type mapping: GET/POST /api/exam/question-types (persisted in PostgreSQL)
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces

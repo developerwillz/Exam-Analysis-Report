@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/Layout";
 import ParserPage from "@/pages/Parser";
 import QuestionTypesPage from "@/pages/QuestionTypes";
+import BookmarkletPage from "@/pages/Bookmarklet";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -21,6 +22,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={ParserPage} />
+        <Route path="/bookmarklet" component={BookmarkletPage} />
         <Route path="/settings" component={QuestionTypesPage} />
         <Route component={NotFound} />
       </Switch>

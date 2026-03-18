@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { BookOpen, Settings, FileCode2 } from "lucide-react";
+import { BookOpen, Settings, FileCode2, Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LayoutProps {
@@ -12,6 +12,7 @@ export function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { href: "/", label: "解析页面", icon: FileCode2 },
+    { href: "/bookmarklet", label: "书签工具", icon: Bookmark },
     { href: "/settings", label: "题型设置", icon: Settings },
   ];
 
@@ -23,7 +24,7 @@ export function Layout({ children }: LayoutProps) {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
               <BookOpen className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-display font-bold text-foreground tracking-tight">
+            <h1 className="text-xl font-bold text-foreground tracking-tight">
               Veritas <span className="text-muted-foreground font-normal">|</span> 模考错题分析
             </h1>
           </div>
@@ -33,7 +34,7 @@ export function Layout({ children }: LayoutProps) {
               const isActive = location === item.href;
               return (
                 <Link key={item.href} href={item.href} className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   isActive 
                     ? "bg-primary/10 text-primary" 
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
