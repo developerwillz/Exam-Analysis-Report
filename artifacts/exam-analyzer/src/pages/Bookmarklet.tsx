@@ -6,36 +6,44 @@ import { useToast } from "@/hooks/use-toast";
 // Bookmarklet script — targets veritas.xiaosaas.com el-table structure.
 //
 // Confirmed table structure (from live HTML):
-//   Student name : <span class="x-color-blue x-pointer">张润思</span>  (in fixed left column)
-//   Correct cell : <span class="x-title-14 x-title-bold x-color-green">D</span>  or el-icon-check
-//   Wrong cell   : <span class="x-title-14 x-title-bold x-color-red">A</span>   or el-icon-close
-//   Question nums: from <th> header cells whose innerText is a bare integer
+//   Student name : <span class="x-color-blue x-pointer">张润思</span>
+//   Correct cell : <span class="x-title-14 x-title-bold x-color-green">D</span>
+//   Wrong cell   : <span class="x-title-14 x-title-bold x-color-red">A</span> or el-icon-close
+//   Question nums: from <th> textContent that is a bare integer
 //   Column key   : CSS class matching /el-table_\d+_column_\d+/ on both <th> and <td>
+//
+// IMPORTANT: use textContent (not innerText) so display:none sections still work.
 // ─────────────────────────────────────────────────────────────────────────────
 const BOOKMARKLET_SCRIPT = `javascript:(function(){
 var students=[];
 var examTitle='';
+var debug=[];
 
 /* ── 1. Exam title ─────────────────────────────────────────── */
 try{
-  var els=document.querySelectorAll('p,span,div,h3,h4');
-  for(var i=0;i<els.length;i++){
-    var t=(els[i].innerText||'').trim();
-    if(t.match(/(真题|模考|SAT|TOEFL|托福|雅思|Module)/i)&&t.length>5&&t.length<150&&els[i].children.length===0){
+  var titleEls=document.querySelectorAll('p');
+  for(var i=0;i<titleEls.length;i++){
+    var t=(titleEls[i].textContent||'').trim();
+    if(t.match(/(真题|模考|SAT|TOEFL|托福|雅思|Module)/i)&&t.length>5&&t.length<200){
       examTitle=t;break;
     }
   }
-}catch(e){}
+}catch(e){debug.push('title err:'+e);}
 
 /* ── 2. Process each el-table on the page ──────────────────── */
+/* NOTE: use textContent everywhere — innerText returns '' for display:none elements */
 var tableEls=document.querySelectorAll('.el-table');
-tableEls.forEach(function(tableEl){
+debug.push('tables found:'+tableEls.length);
+
+tableEls.forEach(function(tableEl,ti){
 
   /* Build: columnClass → questionNumber  (from header th cells) */
   var colToQ={};
   var headerThs=tableEl.querySelectorAll('.el-table__header th');
+  debug.push('table'+ti+' headers:'+headerThs.length);
+
   headerThs.forEach(function(th){
-    var txt=(th.innerText||'').trim();
+    var txt=(th.textContent||'').trim();   /* textContent works on hidden elements */
     if(!/^\d+$/.test(txt))return;
     var qNum=parseInt(txt);
     th.classList.forEach(function(c){
@@ -43,44 +51,45 @@ tableEls.forEach(function(tableEl){
     });
   });
 
+  debug.push('table'+ti+' qcols:'+Object.keys(colToQ).length+' ['+Object.values(colToQ).slice(0,5).join(',')+']');
+
   /* Need at least a few question columns to be a score table */
   if(Object.keys(colToQ).length<3)return;
 
   /* Process body rows */
   var rows=tableEl.querySelectorAll('.el-table__body tr.el-table__row');
+  debug.push('table'+ti+' rows:'+rows.length);
+
   rows.forEach(function(row){
 
-    /* Student name — blue clickable span in first column */
+    /* Student name — blue clickable span */
     var nameSpan=row.querySelector('span.x-color-blue.x-pointer');
     if(!nameSpan)return;
-    var name=nameSpan.innerText.trim();
+    var name=(nameSpan.textContent||'').trim();
     if(!name||name.length<2)return;
 
-    /* Skip students who have not started (未开始 appears in row text) */
-    if((row.innerText||'').includes('未开始'))return;
+    /* Skip students who have not started */
+    if((row.textContent||'').includes('\\u672a\\u5f00\\u59cb'))return;
 
     var wrongQs=[];
     var tds=row.querySelectorAll('td');
     tds.forEach(function(td){
-      /* Find this td's column class */
       var colClass=null;
       td.classList.forEach(function(c){
-        if(/^el-table_\d+_column_\d+$/.test(c))colClass=c;
+        if(/^el-table_\\d+_column_\\d+$/.test(c))colClass=c;
       });
       var qNum=colToQ[colClass];
-      if(!qNum)return; /* Not a question column */
+      if(!qNum)return;
 
       /* Wrong answer: span with BOTH x-title-bold AND x-color-red */
       var redBold=td.querySelector('span.x-title-bold.x-color-red,span.x-color-red.x-title-bold,span.x-title-14.x-color-red');
       if(redBold)wrongQs.push(qNum);
     });
 
-    /* Deduplicate students (table may be split into left-fixed + scrollable) */
     var existing=students.find(function(s){return s.studentName===name;});
     if(!existing){
       students.push({studentName:name,wrongQuestions:wrongQs});
     }else{
-      /* Merge any extra wrong questions found in a second table section */
       wrongQs.forEach(function(q){
         if(existing.wrongQuestions.indexOf(q)===-1)existing.wrongQuestions.push(q);
       });
@@ -88,7 +97,7 @@ tableEls.forEach(function(tableEl){
   });
 });
 
-/* Sort wrong questions numerically for each student */
+/* Sort wrong questions */
 students.forEach(function(s){
   s.wrongQuestions.sort(function(a,b){return a-b;});
 });
@@ -96,23 +105,24 @@ students.forEach(function(s){
 var payload=JSON.stringify({
   examTitle:examTitle,
   students:students,
-  totalStudents:students.length
+  totalStudents:students.length,
+  _debug:debug
 });
 
-/* ── 3. Copy to clipboard ──────────────────────────────────── */
+/* ── 3. Copy & alert ───────────────────────────────────────── */
 function onDone(){
   if(students.length>0){
     alert('\\u2705 \\u5df2\\u590d\\u5236 '+students.length+' \\u540d\\u5b66\\u751f\\u7684\\u6570\\u636e\\uff01\\n\\u8bf7\\u8fd4\\u56de\\u5206\\u6790\\u5de5\\u5177\\uff0c\\u9009\\u300c\\u7c98\\u8d34 JSON \\u6a21\\u5f0f\\u300d\\u7c98\\u8d34\\u5373\\u53ef\\u3002');
   }else{
-    alert('\\u26a0\\ufe0f \\u672a\\u627e\\u5230\\u5b66\\u751f\\u6210\\u7ee9\\u6570\\u636e\\u3002\\n\\u8bf7\\u786e\\u8ba4\\u5df2\\u5207\\u6362\\u5230\\u6a21\\u8003\\u6210\\u7ee9\\u8be6\\u60c5\\u9875\\uff0c\\u518d\\u6b21\\u70b9\\u51fb\\u4e66\\u7b7e\\u3002');
+    alert('\\u26a0\\ufe0f \\u672a\\u627e\\u5230\\u5b66\\u751f\\u6210\\u7ee9\\u6570\\u636e\\u3002\\n\\n\\u8bf7\\u786e\\u8ba4\\uff1a\\n1. \\u5df2\\u5207\\u6362\\u5230\\u300c\\u5df2\\u6279\\u6539\\u300d\\u5185\\u5bb9\\u9875\\uff08\\u70b9\\u51fb\\u9875\\u9762\\u4e0a\\u7684\\u300c\\u5df2\\u6279\\u6539\\u300d\\u6807\\u7b7e\\uff09\\n2. \\u6309\\u9898\\u660e\\u7ec6\\u8868\\u683c\\u5df2\\u663e\\u793a\\uff08\\u53ef\\u4ee5\\u770b\\u5230\\u7eff\\u8272/\\u7ea2\\u8272\\u7684\\u9898\\u76ee\\u683c\\uff09\\n\\n\\u8c03\\u8bd5\\u4fe1\\u606f\\uff1a'+JSON.stringify(debug));
   }
 }
 function fallbackCopy(){
   var ta=document.createElement('textarea');
   ta.value=payload;
-  ta.style.position='fixed';ta.style.opacity='0';
+  ta.style.cssText='position:fixed;opacity:0;top:0;left:0;';
   document.body.appendChild(ta);ta.focus();ta.select();
-  try{document.execCommand('copy');}catch(e){}
+  try{document.execCommand('copy');}catch(e){debug.push('copy err:'+e);}
   document.body.removeChild(ta);
   onDone();
 }
@@ -127,17 +137,17 @@ const STEPS = [
   {
     icon: GripHorizontal,
     title: "拖动书签到书签栏",
-    desc: "将下方橙色「提取成绩数据」按钮用鼠标拖动到浏览器顶部的书签栏（需先按 Ctrl+Shift+B 显示书签栏）",
+    desc: "将下方橙色「提取成绩数据」按钮拖动到浏览器书签栏（Ctrl+Shift+B 显示书签栏）",
   },
   {
     icon: Chrome,
-    title: "在教师后台打开成绩页",
-    desc: "登录 veritas.xiaosaas.com，进入对应班级的模考作业，切换到「已批改」成绩详情页，确保成绩表格已显示",
+    title: "进入模考作业 → 点击「已批改」标签",
+    desc: "登录后台 → 找到对应模考作业 → 点击「已批改」标签，直到页面显示学生姓名及绿色/红色答题格",
   },
   {
     icon: MousePointerClick,
     title: "点击书签栏中的「提取成绩数据」",
-    desc: "在教师后台页面点击书签，脚本会自动扫描绿色/红色成绩格，提取错题数据并弹出"已复制"提示",
+    desc: "在已显示成绩表格的页面点击书签，脚本自动提取数据并弹出「已复制 X 名学生数据」提示",
   },
   {
     icon: ClipboardPaste,
@@ -157,7 +167,7 @@ export default function BookmarkletPage() {
       setTimeout(() => setCopied(false), 3000);
       toast({
         title: "脚本代码已复制",
-        description: "在浏览器书签管理器中新建书签，将代码粘贴到「网址」栏后保存",
+        description: "在浏览器书签管理器新建书签，将代码粘贴到「网址」栏后保存",
       });
     } catch {
       toast({ title: "复制失败", description: "请手动选择并复制", variant: "destructive" });
@@ -167,8 +177,8 @@ export default function BookmarkletPage() {
   const handleBookmarkletClick = (e: React.MouseEvent) => {
     e.preventDefault();
     toast({
-      title: "请拖动，不要在这里点击 👆",
-      description: "此按钮需拖到浏览器书签栏。登录教师后台后，再点击书签栏中的按钮才能提取数据。",
+      title: "请拖动到书签栏，不要在这里点击 👆",
+      description: "此按钮需拖到浏览器书签栏。在教师后台"已批改"页面点击书签才能提取数据。",
     });
   };
 
@@ -184,11 +194,11 @@ export default function BookmarkletPage() {
         </p>
       </div>
 
-      {/* Important notice */}
-      <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
-        <ChevronRight className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-500" />
+      {/* Key instruction */}
+      <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-300 rounded-xl text-sm text-amber-900">
+        <span className="text-lg flex-shrink-0">⚠️</span>
         <div>
-          <strong>重要：</strong>下方橙色按钮需要用鼠标<strong>拖动</strong>到浏览器书签栏，而不是在此处点击。添加成功后，在教师后台页面点击该书签才能提取数据。
+          <strong>使用前必须先切换到「已批改」标签：</strong>在教师后台找到对应模考作业，点击页面上的「<strong>已批改</strong>」标签，等待出现学生姓名及绿色/红色答题格后，再点击书签提取数据。在其他标签页（未提交、已提交等）点击书签将无法找到成绩数据。
         </div>
       </div>
 
@@ -215,12 +225,12 @@ export default function BookmarkletPage() {
         </a>
 
         <p className="text-xs text-orange-600/80 text-center max-w-sm">
-          ↑ 按住此按钮 → 拖动到浏览器顶部书签栏 → 松开鼠标
+          ↑ 按住此按钮 → 拖动到浏览器书签栏 → 松开鼠标
         </p>
 
         <div className="w-full border-t border-orange-200 pt-4">
           <p className="text-xs text-center text-orange-700/70 mb-3 font-medium">
-            拖动不成功？点击「复制脚本代码」→ 书签栏右键「添加书签」→ 将代码粘贴到网址栏
+            拖动不成功？点击下方按钮复制代码 → 书签栏右键「添加书签」→ 将代码粘贴到网址栏
           </p>
           <div className="flex justify-center">
             <button
@@ -239,13 +249,13 @@ export default function BookmarkletPage() {
         <h3 className="text-base font-bold text-foreground">完整使用步骤</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {STEPS.map((step, i) => (
-            <div key={i} className="flex gap-4 p-5 bg-card rounded-xl border border-border/50 shadow-sm">
-              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <div key={i} className={`flex gap-4 p-5 bg-card rounded-xl border shadow-sm ${i === 1 ? 'border-amber-300 bg-amber-50' : 'border-border/50'}`}>
+              <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${i === 1 ? 'bg-amber-200 text-amber-800' : 'bg-primary/10 text-primary'}`}>
                 <step.icon className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-primary/70 bg-primary/10 rounded px-1.5 py-0.5">步骤 {i + 1}</span>
+                  <span className={`text-xs font-bold rounded px-1.5 py-0.5 ${i === 1 ? 'text-amber-800 bg-amber-200' : 'text-primary/70 bg-primary/10'}`}>步骤 {i + 1}</span>
                   <span className="text-sm font-bold text-foreground">{step.title}</span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
@@ -259,7 +269,7 @@ export default function BookmarkletPage() {
       <div className="flex items-start gap-3 p-4 bg-muted/50 border border-border/50 rounded-xl text-xs text-muted-foreground">
         <span className="text-base">🔒</span>
         <div>
-          <strong className="text-foreground">安全说明：</strong>书签脚本仅在你的本地浏览器运行，只读取当前页面可见的成绩表格（识别绿色正确、红色错误格），不会上传任何 Cookie、密码或登录信息。
+          <strong className="text-foreground">安全说明：</strong>书签脚本仅在本地浏览器运行，只读取当前页面可见的成绩表格，不会上传任何 Cookie、密码或登录信息。
         </div>
       </div>
     </div>
