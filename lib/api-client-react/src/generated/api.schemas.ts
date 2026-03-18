@@ -8,3 +8,42 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ParseExamRequest {
+  /** Raw HTML content from the teacher page */
+  html: string;
+}
+
+export interface StudentResult {
+  studentName: string;
+  wrongQuestions: number[];
+  totalQuestions?: number;
+  score?: string;
+}
+
+export interface ParseExamResponse {
+  examTitle?: string;
+  students: StudentResult[];
+  totalStudents: number;
+}
+
+export interface QuestionTypeEntry {
+  questionNumber: number;
+  questionType: string;
+}
+
+export interface QuestionTypeMapping {
+  mappings: QuestionTypeEntry[];
+  name?: string;
+}
+
+export interface ExportCsvRequest {
+  students: StudentResult[];
+  questionTypeMappings?: QuestionTypeEntry[];
+  examTitle?: string;
+}
+
+export interface SuccessResponse {
+  success: boolean;
+  message?: string;
+}

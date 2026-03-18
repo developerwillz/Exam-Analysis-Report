@@ -14,3 +14,79 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Parse the HTML from teacher page and extract student wrong answers
+ * @summary Parse exam HTML page
+ */
+export const ParseExamHtmlBody = zod.object({
+  html: zod.string().describe("Raw HTML content from the teacher page"),
+});
+
+export const ParseExamHtmlResponse = zod.object({
+  examTitle: zod.string().optional(),
+  students: zod.array(
+    zod.object({
+      studentName: zod.string(),
+      wrongQuestions: zod.array(zod.number()),
+      totalQuestions: zod.number().optional(),
+      score: zod.string().optional(),
+    }),
+  ),
+  totalStudents: zod.number(),
+});
+
+/**
+ * Generate CSV from student wrong answers with optional question type mapping
+ * @summary Export exam results as CSV
+ */
+export const ExportCsvBody = zod.object({
+  students: zod.array(
+    zod.object({
+      studentName: zod.string(),
+      wrongQuestions: zod.array(zod.number()),
+      totalQuestions: zod.number().optional(),
+      score: zod.string().optional(),
+    }),
+  ),
+  questionTypeMappings: zod
+    .array(
+      zod.object({
+        questionNumber: zod.number(),
+        questionType: zod.string(),
+      }),
+    )
+    .optional(),
+  examTitle: zod.string().optional(),
+});
+
+/**
+ * @summary Get saved question type mapping
+ */
+export const GetQuestionTypesResponse = zod.object({
+  mappings: zod.array(
+    zod.object({
+      questionNumber: zod.number(),
+      questionType: zod.string(),
+    }),
+  ),
+  name: zod.string().optional(),
+});
+
+/**
+ * @summary Save question type mapping
+ */
+export const SaveQuestionTypesBody = zod.object({
+  mappings: zod.array(
+    zod.object({
+      questionNumber: zod.number(),
+      questionType: zod.string(),
+    }),
+  ),
+  name: zod.string().optional(),
+});
+
+export const SaveQuestionTypesResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});

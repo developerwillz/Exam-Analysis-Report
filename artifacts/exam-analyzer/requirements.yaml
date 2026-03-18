@@ -1,0 +1,12 @@
+packages:
+  "framer-motion": "Smooth entry animations for table rows and empty states"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility to merge tailwind classes safely"
+  "lucide-react": "Beautiful consistent icons"
+
+images: []
+
+notes:
+  - Expects API client hooks from @workspace/api-client-react
+  - CSV export returns a string that needs to be downloaded as a blob
+  - Uses framer-motion for simple staggered reveals

@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: exam
+    description: Exam analysis operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /exam/parse:
+    post:
+      operationId: parseExamHtml
+      tags: [exam]
+      summary: Parse exam HTML page
+      description: Parse the HTML from teacher page and extract student wrong answers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseExamRequest"
+      responses:
+        "200":
+          description: Parsed exam data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseExamResponse"
+
+  /exam/export-csv:
+    post:
+      operationId: exportCsv
+      tags: [exam]
+      summary: Export exam results as CSV
+      description: Generate CSV from student wrong answers with optional question type mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportCsvRequest"
+      responses:
+        "200":
+          description: CSV file content
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /exam/question-types:
+    get:
+      operationId: getQuestionTypes
+      tags: [exam]
+      summary: Get saved question type mapping
+      responses:
+        "200":
+          description: Question type mapping
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionTypeMapping"
+    post:
+      operationId: saveQuestionTypes
+      tags: [exam]
+      summary: Save question type mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionTypeMapping"
+      responses:
+        "200":
+          description: Saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +106,92 @@ components:
       required:
         - status
 
+    ParseExamRequest:
+      type: object
+      properties:
+        html:
+          type: string
+          description: Raw HTML content from the teacher page
+      required:
+        - html
+
+    StudentResult:
+      type: object
+      properties:
+        studentName:
+          type: string
+        wrongQuestions:
+          type: array
+          items:
+            type: integer
+        totalQuestions:
+          type: integer
+        score:
+          type: string
+      required:
+        - studentName
+        - wrongQuestions
+
+    ParseExamResponse:
+      type: object
+      properties:
+        examTitle:
+          type: string
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentResult"
+        totalStudents:
+          type: integer
+      required:
+        - students
+        - totalStudents
+
+    QuestionTypeEntry:
+      type: object
+      properties:
+        questionNumber:
+          type: integer
+        questionType:
+          type: string
+      required:
+        - questionNumber
+        - questionType
+
+    QuestionTypeMapping:
+      type: object
+      properties:
+        mappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionTypeEntry"
+        name:
+          type: string
+      required:
+        - mappings
+
+    ExportCsvRequest:
+      type: object
+      properties:
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentResult"
+        questionTypeMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionTypeEntry"
+        examTitle:
+          type: string
+      required:
+        - students
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success

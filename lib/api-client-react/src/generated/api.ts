@@ -5,18 +5,28 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ExportCsvRequest,
+  HealthStatus,
+  ParseExamRequest,
+  ParseExamResponse,
+  QuestionTypeMapping,
+  SuccessResponse,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +109,338 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Parse the HTML from teacher page and extract student wrong answers
+ * @summary Parse exam HTML page
+ */
+export const getParseExamHtmlUrl = () => {
+  return `/api/exam/parse`;
+};
+
+export const parseExamHtml = async (
+  parseExamRequest: ParseExamRequest,
+  options?: RequestInit,
+): Promise<ParseExamResponse> => {
+  return customFetch<ParseExamResponse>(getParseExamHtmlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(parseExamRequest),
+  });
+};
+
+export const getParseExamHtmlMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseExamHtml>>,
+    TError,
+    { data: BodyType<ParseExamRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseExamHtml>>,
+  TError,
+  { data: BodyType<ParseExamRequest> },
+  TContext
+> => {
+  const mutationKey = ["parseExamHtml"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseExamHtml>>,
+    { data: BodyType<ParseExamRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return parseExamHtml(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ParseExamHtmlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseExamHtml>>
+>;
+export type ParseExamHtmlMutationBody = BodyType<ParseExamRequest>;
+export type ParseExamHtmlMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Parse exam HTML page
+ */
+export const useParseExamHtml = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseExamHtml>>,
+    TError,
+    { data: BodyType<ParseExamRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof parseExamHtml>>,
+  TError,
+  { data: BodyType<ParseExamRequest> },
+  TContext
+> => {
+  return useMutation(getParseExamHtmlMutationOptions(options));
+};
+
+/**
+ * Generate CSV from student wrong answers with optional question type mapping
+ * @summary Export exam results as CSV
+ */
+export const getExportCsvUrl = () => {
+  return `/api/exam/export-csv`;
+};
+
+export const exportCsv = async (
+  exportCsvRequest: ExportCsvRequest,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getExportCsvUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(exportCsvRequest),
+  });
+};
+
+export const getExportCsvMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof exportCsv>>,
+    TError,
+    { data: BodyType<ExportCsvRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof exportCsv>>,
+  TError,
+  { data: BodyType<ExportCsvRequest> },
+  TContext
+> => {
+  const mutationKey = ["exportCsv"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof exportCsv>>,
+    { data: BodyType<ExportCsvRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return exportCsv(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExportCsvMutationResult = NonNullable<
+  Awaited<ReturnType<typeof exportCsv>>
+>;
+export type ExportCsvMutationBody = BodyType<ExportCsvRequest>;
+export type ExportCsvMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Export exam results as CSV
+ */
+export const useExportCsv = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof exportCsv>>,
+    TError,
+    { data: BodyType<ExportCsvRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof exportCsv>>,
+  TError,
+  { data: BodyType<ExportCsvRequest> },
+  TContext
+> => {
+  return useMutation(getExportCsvMutationOptions(options));
+};
+
+/**
+ * @summary Get saved question type mapping
+ */
+export const getGetQuestionTypesUrl = () => {
+  return `/api/exam/question-types`;
+};
+
+export const getQuestionTypes = async (
+  options?: RequestInit,
+): Promise<QuestionTypeMapping> => {
+  return customFetch<QuestionTypeMapping>(getGetQuestionTypesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetQuestionTypesQueryKey = () => {
+  return [`/api/exam/question-types`] as const;
+};
+
+export const getGetQuestionTypesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getQuestionTypes>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getQuestionTypes>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetQuestionTypesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getQuestionTypes>>
+  > = ({ signal }) => getQuestionTypes({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getQuestionTypes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetQuestionTypesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getQuestionTypes>>
+>;
+export type GetQuestionTypesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get saved question type mapping
+ */
+
+export function useGetQuestionTypes<
+  TData = Awaited<ReturnType<typeof getQuestionTypes>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getQuestionTypes>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetQuestionTypesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save question type mapping
+ */
+export const getSaveQuestionTypesUrl = () => {
+  return `/api/exam/question-types`;
+};
+
+export const saveQuestionTypes = async (
+  questionTypeMapping: QuestionTypeMapping,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSaveQuestionTypesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(questionTypeMapping),
+  });
+};
+
+export const getSaveQuestionTypesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveQuestionTypes>>,
+    TError,
+    { data: BodyType<QuestionTypeMapping> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveQuestionTypes>>,
+  TError,
+  { data: BodyType<QuestionTypeMapping> },
+  TContext
+> => {
+  const mutationKey = ["saveQuestionTypes"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveQuestionTypes>>,
+    { data: BodyType<QuestionTypeMapping> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveQuestionTypes(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveQuestionTypesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveQuestionTypes>>
+>;
+export type SaveQuestionTypesMutationBody = BodyType<QuestionTypeMapping>;
+export type SaveQuestionTypesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save question type mapping
+ */
+export const useSaveQuestionTypes = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveQuestionTypes>>,
+    TError,
+    { data: BodyType<QuestionTypeMapping> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveQuestionTypes>>,
+  TError,
+  { data: BodyType<QuestionTypeMapping> },
+  TContext
+> => {
+  return useMutation(getSaveQuestionTypesMutationOptions(options));
+};

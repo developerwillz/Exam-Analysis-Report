@@ -1,0 +1,259 @@
+import { useState } from "react";
+import { useExamParser, useExamTypes, useCsvExport } from "@/hooks/use-exam";
+import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Code2, 
+  FileCheck2, 
+  Download, 
+  AlertCircle, 
+  Loader2,
+  Users,
+  Target,
+  ChevronRight
+} from "lucide-react";
+import type { ParseExamResponse } from "@workspace/api-client-react";
+
+export default function ParserPage() {
+  const [htmlInput, setHtmlInput] = useState("");
+  const [parsedData, setParsedData] = useState<ParseExamResponse | null>(null);
+  
+  const { toast } = useToast();
+  const parseMutation = useExamParser();
+  const exportService = useCsvExport();
+  const { data: typesData } = useExamTypes();
+
+  const handleParse = async () => {
+    if (!htmlInput.trim()) {
+      toast({
+        title: "无内容",
+        description: "请先粘贴需要解析的网页 HTML 代码",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const result = await parseMutation.mutateAsync({ data: { html: htmlInput } });
+      setParsedData(result);
+      toast({
+        title: "解析成功",
+        description: `成功提取 ${result.totalStudents} 名学生的数据`,
+      });
+    } catch (error) {
+      toast({
+        title: "解析失败",
+        description: "无法解析该 HTML，请检查是否完整复制了老师管理后台的代码",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleExport = async () => {
+    if (!parsedData) return;
+
+    try {
+      await exportService.downloadCsv({
+        students: parsedData.students,
+        examTitle: parsedData.examTitle,
+        questionTypeMappings: typesData?.mappings || []
+      }, `${parsedData.examTitle || '模考结果'}.csv`);
+      
+      toast({
+        title: "导出成功",
+        description: "CSV 文件已开始下载",
+      });
+    } catch (error) {
+      toast({
+        title: "导出失败",
+        description: "生成 CSV 文件时发生错误",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Helper to get question type name
+  const getQuestionType = (qNum: number) => {
+    if (!typesData?.mappings) return null;
+    const mapping = typesData.mappings.find(m => m.questionNumber === qNum);
+    return mapping ? mapping.questionType : null;
+  };
+
+  return (
+    <div className="flex flex-col gap-8 pb-12">
+      {/* Input Section */}
+      <section className="bg-card rounded-2xl p-6 shadow-sm border border-border/50">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-primary/10 rounded-lg text-primary">
+            <Code2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-foreground">网页源代码输入</h2>
+            <p className="text-sm text-muted-foreground">将老师管理后台对应模考结果页面的完整 HTML 粘贴于此</p>
+          </div>
+        </div>
+
+        <div className="relative group">
+          <textarea
+            value={htmlInput}
+            onChange={(e) => setHtmlInput(e.target.value)}
+            placeholder="<html>...</html>"
+            className="w-full h-48 md:h-64 p-4 rounded-xl bg-secondary/30 border border-border/60 font-mono text-sm text-foreground/80 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all resize-none"
+          />
+          <div className="absolute inset-0 pointer-events-none rounded-xl ring-1 ring-inset ring-transparent group-focus-within:ring-primary/10 transition-all" />
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={handleParse}
+            disabled={parseMutation.isPending || !htmlInput.trim()}
+            className="px-6 py-2.5 rounded-xl font-medium bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:bg-primary/90 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all flex items-center gap-2"
+          >
+            {parseMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileCheck2 className="w-4 h-4" />
+            )}
+            {parseMutation.isPending ? "解析中..." : "开始解析"}
+          </button>
+        </div>
+      </section>
+
+      {/* Results Section */}
+      <AnimatePresence mode="wait">
+        {parsedData ? (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="flex flex-col gap-6"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex flex-col justify-center">
+                <span className="text-sm text-muted-foreground font-medium mb-1">考试名称</span>
+                <span className="text-base font-bold text-foreground truncate" title={parsedData.examTitle || "未识别到标题"}>
+                  {parsedData.examTitle || "未识别到标题"}
+                </span>
+              </div>
+              <div className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground font-medium block">已提交学生数</span>
+                  <span className="text-2xl font-display font-bold text-foreground">
+                    {parsedData.totalStudents} <span className="text-sm font-sans font-normal text-muted-foreground ml-1">人</span>
+                  </span>
+                </div>
+              </div>
+              <div className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center">
+                  <Target className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground font-medium block">平均错题数</span>
+                  <span className="text-2xl font-display font-bold text-foreground">
+                    {parsedData.totalStudents > 0 
+                      ? Math.round((parsedData.students.reduce((acc, s) => acc + s.wrongQuestions.length, 0) / parsedData.totalStudents) * 10) / 10
+                      : 0}
+                    <span className="text-sm font-sans font-normal text-muted-foreground ml-1">题</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-border/50 flex items-center justify-between bg-card">
+                <h3 className="text-lg font-bold text-foreground">错题明细表</h3>
+                <button
+                  onClick={handleExport}
+                  disabled={exportService.isPending}
+                  className="px-4 py-2 rounded-lg font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 flex items-center gap-2 text-sm transition-colors"
+                >
+                  {exportService.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  导出 CSV
+                </button>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground bg-muted/50 uppercase">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">学生姓名</th>
+                      <th className="px-6 py-4 font-medium text-center">错题数量</th>
+                      <th className="px-6 py-4 font-medium">错题号及题型</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {parsedData.students.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-12 text-center text-muted-foreground">
+                          没有解析到学生数据
+                        </td>
+                      </tr>
+                    ) : (
+                      parsedData.students.map((student, idx) => (
+                        <motion.tr 
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          key={idx} 
+                          className="hover:bg-muted/30 transition-colors"
+                        >
+                          <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
+                            {student.studentName}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 font-medium text-xs">
+                              {student.wrongQuestions.length} 题
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              {student.wrongQuestions.length === 0 ? (
+                                <span className="text-emerald-500 text-xs font-medium">全对 🎉</span>
+                              ) : (
+                                student.wrongQuestions.map((q) => {
+                                  const type = getQuestionType(q);
+                                  return (
+                                    <span key={q} className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground">
+                                      Q{q}
+                                      {type && (
+                                        <>
+                                          <ChevronRight className="w-3 h-3 text-muted-foreground mx-0.5" />
+                                          <span className="text-primary/80">{type}</span>
+                                        </>
+                                      )}
+                                    </span>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </motion.section>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="py-16 flex flex-col items-center justify-center text-center px-4"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center text-muted-foreground/50 mb-4">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-1">等待解析数据</h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              在上方粘贴 HTML 源码并点击解析，即可查看结构化的错题数据，并支持与预设题型自动匹配。
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
