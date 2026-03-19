@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Bookmark, Copy, Check, Terminal, GripHorizontal, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -93,6 +93,16 @@ export default function BookmarkletPage() {
   const [copiedBookmarklet, setCopiedBookmarklet] = useState(false);
   const [copiedConsole, setCopiedConsole] = useState(false);
   const { toast } = useToast();
+  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
+
+  // React blocks javascript: URLs in href props for security.
+  // Setting the attribute directly on the DOM element bypasses this restriction,
+  // which is intentional here — we need a draggable bookmarklet link.
+  useEffect(() => {
+    if (bookmarkletRef.current) {
+      bookmarkletRef.current.setAttribute("href", BOOKMARKLET_SCRIPT);
+    }
+  }, []);
 
   const handleCopyBookmarklet = async () => {
     try {
@@ -205,7 +215,7 @@ export default function BookmarkletPage() {
               拖动下方按钮到书签栏（Ctrl+Shift+B 显示书签栏）
             </p>
             <a
-              href={BOOKMARKLET_SCRIPT}
+              ref={bookmarkletRef}
               className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-base shadow-lg cursor-grab active:cursor-grabbing select-none flex items-center gap-2 transition-colors"
               onClick={handleBookmarkletClick}
               draggable
