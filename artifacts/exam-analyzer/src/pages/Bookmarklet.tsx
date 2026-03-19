@@ -12,81 +12,16 @@ import { useToast } from "@/hooks/use-toast";
 //                   (-- means unanswered; counts as wrong for participating students)
 //  CORRECT answer : span.x-title-bold.x-color-green
 //
-// Bookmarklet quoting rule:
-//   The javascript: URL cannot contain unescaped single quotes inside strings.
-//   → Use DOUBLE QUOTES for all querySelector / string literals inside the bookmarklet.
+// Bookmarklet quoting rule (user-verified):
+//   Single quotes inside javascript: URLs must be URL-encoded as %27.
+//   The browser decodes %27 → ' before executing the script.
+//   Regex literals (/pattern/) work fine as-is; only string literals need %27.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Bookmarklet (double-quoted internally, shows overlay popup) ───────────────
-const BOOKMARKLET_SCRIPT = `javascript:(function(){
-  var students=[], examTitle="";
-
-  /* exam title */
-  document.querySelectorAll("p").forEach(function(p){
-    var t=(p.textContent||"").trim();
-    if(!examTitle && /(真题|模考|SAT|TOEFL|托福|雅思|Module)/i.test(t) && t.length>5 && t.length<200 && p.children.length===0)
-      examTitle=t;
-  });
-
-  /* find score tables */
-  document.querySelectorAll(".el-table").forEach(function(tbl){
-    var colToQ={};
-    tbl.querySelectorAll(".el-table__header th").forEach(function(th){
-      var raw=(th.textContent||"").trim();
-      var num=/^\\d+$/.test(raw) ? parseInt(raw) : ((raw.match(/^Q(\\d+)/i)||[])[1] ? parseInt(raw.match(/^Q(\\d+)/i)[1]) : null);
-      if(!num) return;
-      th.classList.forEach(function(c){ if(/^el-table_\\d+_column_\\d+$/.test(c)) colToQ[c]=num; });
-    });
-    if(Object.keys(colToQ).length<2) return;
-
-    tbl.querySelectorAll(".el-table__body tr.el-table__row").forEach(function(row){
-      var ns=row.querySelector("span.x-color-blue.x-pointer");
-      if(!ns) return;
-      var name=(ns.textContent||"").trim();
-      if(!name || name.length<2) return;
-      /* skip students who did not take the exam */
-      if((row.textContent||"").includes("未开始")) return;
-
-      var wq=[];
-      row.querySelectorAll("td").forEach(function(td){
-        var cc=null;
-        td.classList.forEach(function(c){ if(/^el-table_\\d+_column_\\d+$/.test(c)) cc=c; });
-        if(!colToQ[cc]) return;
-        var cellText=(td.textContent||"").trim();
-        /* wrong = red-bold span OR unanswered "--" */
-        if(td.querySelector("span.x-title-bold.x-color-red") || td.querySelector("span.x-color-red.x-title-bold") || cellText==="--")
-          wq.push(colToQ[cc]);
-      });
-
-      var ex=students.find(function(s){ return s.studentName===name; });
-      if(!ex) students.push({studentName:name, wrongQuestions:wq});
-      else wq.forEach(function(q){ if(ex.wrongQuestions.indexOf(q)<0) ex.wrongQuestions.push(q); });
-    });
-  });
-
-  students.forEach(function(s){ s.wrongQuestions.sort(function(a,b){ return a-b; }); });
-  var result=JSON.stringify({examTitle:examTitle, students:students, totalStudents:students.length}, null, 2);
-
-  /* show overlay popup */
-  var old=document.getElementById("_xe"); if(old) old.remove();
-  var o=document.createElement("div");
-  o.id="_xe";
-  o.setAttribute("style","position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;");
-  var ok=students.length>0;
-  var inner=document.createElement("div");
-  inner.setAttribute("style","background:#fff;border-radius:10px;width:580px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5);overflow:hidden;");
-  var hdrTxt=ok ? ("\\u2705 \\u63d0\\u53d6\\u6210\\u529f\\uff01\\u5171 "+students.length+" \\u540d\\u5b66\\u751f") : "\\u26a0\\ufe0f \\u672a\\u627e\\u5230\\u6210\\u7ee9\\u8868\\uff0c\\u8bf7\\u5207\\u6362\\u5230\\u5df2\\u6279\\u6539\\u9875\\u9762";
-  inner.innerHTML="<div style=\\"padding:14px 18px;background:"+(ok?"#16a34a":"#dc2626")+";color:#fff;display:flex;justify-content:space-between;align-items:center;\\"><b>"+hdrTxt+"</b><button onclick=\\"document.getElementById('_xe').remove()\\" style=\\"background:rgba(255,255,255,.25);border:none;color:#fff;padding:3px 10px;border-radius:5px;cursor:pointer;\\">\\u5173\\u95ed</button></div>"+(ok?"<div style=\\"padding:10px 16px 4px;\\"><button id=\\"_xec\\" style=\\"background:#2563eb;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:bold;\\">\\u4e00\\u952e\\u590d\\u5236</button><span id=\\"_xes\\" style=\\"color:green;margin-left:10px;display:none;\\">\\u2705 \\u5df2\\u590d\\u5236</span></div>":"")+"<textarea readonly style=\\"flex:1;margin:8px 16px 16px;padding:8px;font-size:11px;font-family:monospace;border:1px solid #ccc;border-radius:6px;resize:none;min-height:200px;\\">"+result.replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</textarea>";
-  o.appendChild(inner);
-  document.body.appendChild(o);
-  o.addEventListener("click",function(e){ if(e.target===o) o.remove(); });
-  if(ok){
-    document.getElementById("_xec").onclick=function(){
-      var ta=inner.querySelector("textarea"); ta.select();
-      navigator.clipboard.writeText(result).then(function(){ document.getElementById("_xes").style.display="inline"; }).catch(function(){ document.execCommand("copy"); document.getElementById("_xes").style.display="inline"; });
-    };
-  }
-})();`;
+// ── Bookmarklet (user-verified working version) ───────────────────────────────
+// Key: single quotes inside javascript: URLs must be %27 (URL-encoded).
+// The browser URL-decodes %27 → ' before executing, so selectors work correctly.
+const BOOKMARKLET_SCRIPT = `javascript:(function(){  try{    var students=[], examTitle='';    document.querySelectorAll('p').forEach(function(p){      var t=(p.textContent||'').trim();      if(!examTitle && /(真题|模考|SAT|TOEFL|托福|雅思|Module)/i.test(t) && t.length>5 && t.length<200 && p.children.length===0){        examTitle=t;      }    });    document.querySelectorAll('.el-table').forEach(function(tbl){      var colToQ={};      tbl.querySelectorAll('.el-table__header th').forEach(function(th){        var raw=(th.textContent||'').trim();        var m=raw.match(/^Q(\\d+)/i);        var num=/^\\d+$/.test(raw) ? parseInt(raw,10) : (m ? parseInt(m[1],10) : null);        if(!num) return;        th.classList.forEach(function(c){          if(/^el-table_\\d+_column_\\d+$/.test(c)){            colToQ[c]=num;          }        });      });      if(Object.keys(colToQ).length<2) return;      tbl.querySelectorAll(%27.el-table__body tr.el-table__row%27).forEach(function(row){        var ns=row.querySelector(%27span.x-color-blue.x-pointer%27);        if(!ns) return;        var name=(ns.textContent||%27%27).trim();        var rowText=(row.textContent||%27%27);        if(!name || name.length<2 || rowText.indexOf(%27未开始%27)>-1) return;        var wq=[];        row.querySelectorAll(%27td%27).forEach(function(td){          var cc=null;          td.classList.forEach(function(c){            if(/^el-table_\\d+_column_\\d+$/.test(c)) cc=c;          });          if(!colToQ[cc]) return;          var cellText=(td.textContent||%27%27).trim();          if(            td.querySelector(%27span.x-title-bold.x-color-red, span.x-color-red.x-title-bold%27) ||            cellText===%27--%27          ){            wq.push(colToQ[cc]);          }        });        var ex=students.find(function(s){          return s.studentName===name;        });        if(!ex){          students.push({            studentName:name,            wrongQuestions:wq          });        }else{          wq.forEach(function(q){            if(ex.wrongQuestions.indexOf(q)<0) ex.wrongQuestions.push(q);          });        }      });    });    students.forEach(function(s){      s.wrongQuestions.sort(function(a,b){ return a-b; });    });    var result=JSON.stringify({      examTitle:examTitle,      students:students,      totalStudents:students.length    }, null, 2);    if(navigator.clipboard && navigator.clipboard.writeText){      navigator.clipboard.writeText(result).then(function(){        alert(%27提取成功，共 %27 + students.length + %27 名学生，结果已复制到剪贴板%27);      }).catch(function(){        prompt(%27自动复制失败，请手动复制下面内容：%27, result);      });    }else{      prompt(%27当前页面不支持自动复制，请手动复制下面内容：%27, result);    }  }catch(e){    alert(%27报错: %27 + e.message);    console.error(e);  }})();`;
 
 // ── Console Script (paste into Chrome DevTools → Console) ────────────────────
 const CONSOLE_SCRIPT = `(function(){
