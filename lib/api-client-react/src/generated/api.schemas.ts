@@ -30,11 +30,21 @@ export interface ParseExamResponse {
 export interface QuestionTypeEntry {
   questionNumber: number;
   questionType: string;
+  module?: string;
 }
 
 export interface QuestionTypeMapping {
   mappings: QuestionTypeEntry[];
   name?: string;
+}
+
+export interface ConfigSummary {
+  name: string;
+  count: number;
+}
+
+export interface ListConfigsResponse {
+  configs: ConfigSummary[];
 }
 
 export interface ExportCsvRequest {

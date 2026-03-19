@@ -54,10 +54,23 @@ export const ExportCsvBody = zod.object({
       zod.object({
         questionNumber: zod.number(),
         questionType: zod.string(),
+        module: zod.string().optional(),
       }),
     )
     .optional(),
   examTitle: zod.string().optional(),
+});
+
+/**
+ * @summary List all saved configs
+ */
+export const ListConfigsResponse = zod.object({
+  configs: zod.array(
+    zod.object({
+      name: zod.string(),
+      count: zod.number(),
+    }),
+  ),
 });
 
 /**
@@ -68,6 +81,7 @@ export const GetQuestionTypesResponse = zod.object({
     zod.object({
       questionNumber: zod.number(),
       questionType: zod.string(),
+      module: zod.string().optional(),
     }),
   ),
   name: zod.string().optional(),
@@ -81,6 +95,7 @@ export const SaveQuestionTypesBody = zod.object({
     zod.object({
       questionNumber: zod.number(),
       questionType: zod.string(),
+      module: zod.string().optional(),
     }),
   ),
   name: zod.string().optional(),

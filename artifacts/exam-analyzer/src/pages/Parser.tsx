@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useExamParser, useExamTypes, useCsvExport } from "@/hooks/use-exam";
+import { useExamParser, useExamTypes, useExamConfigs, useCsvExport } from "@/hooks/use-exam";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -12,7 +12,8 @@ import {
   Target,
   ChevronRight,
   ClipboardPaste,
-  Bookmark
+  Bookmark,
+  Settings2,
 } from "lucide-react";
 import type { ParseExamResponse, StudentResult } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -24,11 +25,15 @@ export default function ParserPage() {
   const [jsonInput, setJsonInput] = useState("");
   const [inputMode, setInputMode] = useState<InputMode>("html");
   const [parsedData, setParsedData] = useState<ParseExamResponse | null>(null);
+  const [selectedConfigName, setSelectedConfigName] = useState<string>("");
   
   const { toast } = useToast();
   const parseMutation = useExamParser();
   const exportService = useCsvExport();
-  const { data: typesData } = useExamTypes();
+  const { data: configsData } = useExamConfigs();
+  const { data: typesData } = useExamTypes(selectedConfigName || undefined);
+
+  const configs = configsData?.configs || [];
 
   const handleParseHtml = async () => {
     if (!htmlInput.trim()) {
@@ -54,7 +59,6 @@ export default function ParserPage() {
       if (!data.students || !Array.isArray(data.students)) {
         throw new Error("格式不正确");
       }
-      // Normalize wrong questions to numbers
       const normalized: ParseExamResponse = {
         examTitle: data.examTitle,
         totalStudents: data.students.length,
@@ -88,7 +92,7 @@ export default function ParserPage() {
 
   const getQuestionType = (qNum: number) => {
     if (!typesData?.mappings) return null;
-    return typesData.mappings.find(m => m.questionNumber === qNum)?.questionType || null;
+    return typesData.mappings.find(m => m.questionNumber === qNum) || null;
   };
 
   return (
@@ -172,7 +176,6 @@ export default function ParserPage() {
               </div>
             </div>
 
-            {/* Quick guide */}
             <div className="mb-4 flex items-start gap-3 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
               <Bookmark className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-600" />
               <div className="space-y-1">
@@ -210,6 +213,7 @@ export default function ParserPage() {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col gap-6"
           >
+            {/* Summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex flex-col justify-center">
                 <span className="text-sm text-muted-foreground font-medium mb-1">考试名称</span>
@@ -244,9 +248,30 @@ export default function ParserPage() {
               </div>
             </div>
 
-            <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden flex flex-col">
-              <div className="p-6 border-b border-border/50 flex items-center justify-between bg-card">
-                <h3 className="text-lg font-bold text-foreground">错题明细表</h3>
+            {/* Config selector + export */}
+            <div className="bg-card rounded-2xl shadow-sm border border-border/50 p-5 flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Settings2 className="w-4 h-4 text-primary" />
+                选择题型配置：
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <select
+                  value={selectedConfigName}
+                  onChange={(e) => setSelectedConfigName(e.target.value)}
+                  className="w-full max-w-xs px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                >
+                  <option value="">— 不使用题型标注 —</option>
+                  {configs.map(cfg => (
+                    <option key={cfg.name} value={cfg.name}>{cfg.name}（{cfg.count} 题）</option>
+                  ))}
+                </select>
+              </div>
+              {configs.length === 0 && (
+                <Link href="/question-types" className="text-xs text-primary underline underline-offset-2 hover:text-primary/80">
+                  前往设置题型配置 →
+                </Link>
+              )}
+              <div className="ml-auto">
                 <button
                   onClick={handleExport}
                   disabled={exportService.isPending}
@@ -254,7 +279,20 @@ export default function ParserPage() {
                 >
                   {exportService.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   导出 CSV
+                  {selectedConfigName && <span className="text-xs text-muted-foreground ml-1">(含题型标注)</span>}
                 </button>
+              </div>
+            </div>
+
+            {/* Detail table */}
+            <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-border/50 flex items-center justify-between bg-card">
+                <h3 className="text-base font-bold text-foreground">错题明细表</h3>
+                {selectedConfigName && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium">
+                    已应用配置：{selectedConfigName}
+                  </span>
+                )}
               </div>
               
               <div className="overflow-x-auto">
@@ -295,19 +333,22 @@ export default function ParserPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-1.5">
                               {student.wrongQuestions.length === 0 ? (
                                 <span className="text-emerald-500 text-xs font-medium">—</span>
                               ) : (
                                 student.wrongQuestions.map((q) => {
-                                  const type = getQuestionType(q);
+                                  const entry = getQuestionType(q);
                                   return (
-                                    <span key={q} className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground">
-                                      Q{q}
-                                      {type && (
+                                    <span key={q} className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground gap-1">
+                                      <span className="text-muted-foreground">Q{q}</span>
+                                      {entry && (
                                         <>
-                                          <ChevronRight className="w-3 h-3 text-muted-foreground mx-0.5" />
-                                          <span className="text-primary/80">{type}</span>
+                                          <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
+                                          <span className="text-primary/80">{entry.questionType}</span>
+                                          {entry.module && (
+                                            <span className="text-muted-foreground/60 text-[10px]">({entry.module})</span>
+                                          )}
                                         </>
                                       )}
                                     </span>

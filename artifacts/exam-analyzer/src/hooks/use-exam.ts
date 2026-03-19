@@ -2,9 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { 
   useParseExamHtml, 
   useExportCsv, 
-  useGetQuestionTypes, 
+  useGetQuestionTypes,
+  useListConfigs,
   useSaveQuestionTypes,
-  getGetQuestionTypesQueryKey
+  useDeleteConfig,
+  getGetQuestionTypesQueryKey,
+  getListConfigsQueryKey,
 } from "@workspace/api-client-react";
 import type { ExportCsvRequest } from "@workspace/api-client-react";
 
@@ -12,15 +15,35 @@ export function useExamParser() {
   return useParseExamHtml();
 }
 
-export function useExamTypes() {
-  return useGetQuestionTypes();
+export function useExamConfigs() {
+  return useListConfigs();
+}
+
+export function useExamTypes(name?: string) {
+  return useGetQuestionTypes(name, {
+    query: { enabled: name !== undefined ? true : true }
+  });
 }
 
 export function useSaveExamTypes() {
   const queryClient = useQueryClient();
   return useSaveQuestionTypes({
     mutation: {
+      onSuccess: (_data, variables) => {
+        queryClient.invalidateQueries({ queryKey: getListConfigsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetQuestionTypesQueryKey(variables.data.name) });
+        queryClient.invalidateQueries({ queryKey: getGetQuestionTypesQueryKey() });
+      }
+    }
+  });
+}
+
+export function useDeleteExamConfig() {
+  const queryClient = useQueryClient();
+  return useDeleteConfig({
+    mutation: {
       onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListConfigsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetQuestionTypesQueryKey() });
       }
     }
@@ -34,7 +57,6 @@ export function useCsvExport() {
     try {
       const csvContent = await exportMutation.mutateAsync({ data });
       
-      // Create a blob and trigger download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
