@@ -54,7 +54,7 @@ export default function QuestionTypesPage() {
 
   const handleAdd = () => {
     const nextQ = mappings.length > 0 ? Math.max(...mappings.map(m => m.questionNumber)) + 1 : 1;
-    setMappings([...mappings, { questionNumber: nextQ, questionType: "", module: "", keyPoint: "" }]);
+    setMappings([...mappings, { questionNumber: nextQ, questionType: "", module: "Module 1", keyPoint: "" }]);
   };
 
   const handleRemove = (index: number) => {

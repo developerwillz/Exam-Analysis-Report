@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useExamTypes, useExamConfigs, useCsvExport } from "@/hooks/use-exam";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -74,11 +74,38 @@ function buildAnalysisSentence(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const LS_DATA_KEY = "exam_parser_data";
+const LS_CONFIG_KEY = "exam_parser_config";
+
+function loadParsedData(): ParseExamResponse | null {
+  try {
+    const raw = localStorage.getItem(LS_DATA_KEY);
+    return raw ? (JSON.parse(raw) as ParseExamResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function ParserPage() {
   const [jsonInput, setJsonInput] = useState("");
-  const [parsedData, setParsedData] = useState<ParseExamResponse | null>(null);
-  const [selectedConfigName, setSelectedConfigName] = useState<string>("");
+  const [parsedData, setParsedData] = useState<ParseExamResponse | null>(loadParsedData);
+  const [selectedConfigName, setSelectedConfigName] = useState<string>(
+    () => localStorage.getItem(LS_CONFIG_KEY) ?? ""
+  );
   const [copiedReport, setCopiedReport] = useState(false);
+
+  // Persist parsed data across page navigation
+  useEffect(() => {
+    if (parsedData) {
+      localStorage.setItem(LS_DATA_KEY, JSON.stringify(parsedData));
+    } else {
+      localStorage.removeItem(LS_DATA_KEY);
+    }
+  }, [parsedData]);
+
+  useEffect(() => {
+    localStorage.setItem(LS_CONFIG_KEY, selectedConfigName);
+  }, [selectedConfigName]);
 
   const { toast } = useToast();
   const exportService = useCsvExport();
