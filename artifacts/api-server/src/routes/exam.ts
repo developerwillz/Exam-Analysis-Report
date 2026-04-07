@@ -87,6 +87,7 @@ router.get("/question-types", async (req, res) => {
       questionNumber: r.questionNumber,
       questionType: r.questionType,
       module: r.module || "",
+      keyPoint: r.keyPoint || "",
     }));
 
     const nameRow = rows[0];
@@ -114,6 +115,7 @@ router.post("/question-types", async (req, res) => {
           questionNumber: m.questionNumber,
           questionType: m.questionType,
           module: m.module || "",
+          keyPoint: m.keyPoint || "",
           mappingName,
         }))
       );

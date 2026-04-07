@@ -55,6 +55,7 @@ export const ExportCsvBody = zod.object({
         questionNumber: zod.number(),
         questionType: zod.string(),
         module: zod.string().optional(),
+        keyPoint: zod.string().optional(),
       }),
     )
     .optional(),
@@ -82,6 +83,7 @@ export const GetQuestionTypesResponse = zod.object({
       questionNumber: zod.number(),
       questionType: zod.string(),
       module: zod.string().optional(),
+      keyPoint: zod.string().optional(),
     }),
   ),
   name: zod.string().optional(),
@@ -96,6 +98,7 @@ export const SaveQuestionTypesBody = zod.object({
       questionNumber: zod.number(),
       questionType: zod.string(),
       module: zod.string().optional(),
+      keyPoint: zod.string().optional(),
     }),
   ),
   name: zod.string().optional(),

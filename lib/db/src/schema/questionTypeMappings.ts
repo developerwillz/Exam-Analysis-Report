@@ -7,6 +7,7 @@ export const questionTypeMappingsTable = pgTable("question_type_mappings", {
   questionNumber: integer("question_number").notNull(),
   questionType: text("question_type").notNull(),
   module: text("module").notNull().default(""),
+  keyPoint: text("key_point").notNull().default(""),
   mappingName: text("mapping_name").notNull().default("默认映射"),
 });
 

@@ -31,6 +31,7 @@ export interface QuestionTypeEntry {
   questionNumber: number;
   questionType: string;
   module?: string;
+  keyPoint?: string;
 }
 
 export interface QuestionTypeMapping {

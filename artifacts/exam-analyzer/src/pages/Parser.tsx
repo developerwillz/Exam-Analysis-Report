@@ -267,7 +267,7 @@ export default function ParserPage() {
                 </select>
               </div>
               {configs.length === 0 && (
-                <Link href="/question-types" className="text-xs text-primary underline underline-offset-2 hover:text-primary/80">
+                <Link href="/settings" className="text-xs text-primary underline underline-offset-2 hover:text-primary/80">
                   前往设置题型配置 →
                 </Link>
               )}
@@ -346,6 +346,9 @@ export default function ParserPage() {
                                         <>
                                           <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
                                           <span className="text-primary/80">{entry.questionType}</span>
+                                          {entry.keyPoint && (
+                                            <span className="text-violet-600/80">·{entry.keyPoint}</span>
+                                          )}
                                           {entry.module && (
                                             <span className="text-muted-foreground/60 text-[10px]">({entry.module})</span>
                                           )}

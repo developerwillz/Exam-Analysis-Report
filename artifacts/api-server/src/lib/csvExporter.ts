@@ -8,6 +8,8 @@ export interface StudentResult {
 export interface QuestionTypeEntry {
   questionNumber: number;
   questionType: string;
+  module?: string;
+  keyPoint?: string;
 }
 
 export function generateCsv(
@@ -15,9 +17,9 @@ export function generateCsv(
   questionTypeMappings: QuestionTypeEntry[] = [],
   examTitle?: string
 ): string {
-  const typeMap = new Map<number, string>();
+  const typeMap = new Map<number, QuestionTypeEntry>();
   for (const entry of questionTypeMappings) {
-    typeMap.set(entry.questionNumber, entry.questionType);
+    typeMap.set(entry.questionNumber, entry);
   }
 
   const lines: string[] = [];
@@ -32,8 +34,6 @@ export function generateCsv(
   }
 
   if (questionTypeMappings.length > 0) {
-    // With question type mapping: generate detailed breakdown
-    
     // Collect all unique question types
     const allTypes = [...new Set(questionTypeMappings.map(m => m.questionType))];
     
@@ -47,7 +47,16 @@ export function generateCsv(
     // Data rows
     for (const student of students) {
       const wrongQs = student.wrongQuestions;
-      const wrongQsStr = wrongQs.join('、');
+      const wrongQsStr = wrongQs.map(q => {
+        const entry = typeMap.get(q);
+        if (entry) {
+          const parts = [`Q${q}`, entry.questionType];
+          if (entry.module) parts.push(entry.module);
+          if (entry.keyPoint) parts.push(entry.keyPoint);
+          return parts.join('/');
+        }
+        return `Q${q}`;
+      }).join('、');
       const wrongCount = wrongQs.length;
       
       // Count wrong questions per type
@@ -57,9 +66,9 @@ export function generateCsv(
       }
       
       for (const q of wrongQs) {
-        const qType = typeMap.get(q);
-        if (qType && typeCounts.has(qType)) {
-          typeCounts.get(qType)!.push(q);
+        const entry = typeMap.get(q);
+        if (entry && typeCounts.has(entry.questionType)) {
+          typeCounts.get(entry.questionType)!.push(q);
         }
       }
       
@@ -77,20 +86,19 @@ export function generateCsv(
       lines.push(row.map(csvEscape).join(','));
     }
     
-    // Add summary row
+    // Summary rows
     lines.push('');
     lines.push(['汇总统计', '', ''].concat(allTypes.map(() => '')).map(csvEscape).join(','));
     
-    // Per-type error count summary
     const typeErrorCounts = new Map<string, number>();
     for (const t of allTypes) {
       typeErrorCounts.set(t, 0);
     }
     for (const student of students) {
       for (const q of student.wrongQuestions) {
-        const qType = typeMap.get(q);
-        if (qType) {
-          typeErrorCounts.set(qType, (typeErrorCounts.get(qType) || 0) + 1);
+        const entry = typeMap.get(q);
+        if (entry) {
+          typeErrorCounts.set(entry.questionType, (typeErrorCounts.get(entry.questionType) || 0) + 1);
         }
       }
     }
@@ -109,7 +117,7 @@ export function generateCsv(
     for (const student of students) {
       const row = [
         student.studentName,
-        student.wrongQuestions.join('、'),
+        student.wrongQuestions.map(q => `Q${q}`).join('、'),
         student.wrongQuestions.length.toString(),
       ];
       lines.push(row.map(csvEscape).join(','));

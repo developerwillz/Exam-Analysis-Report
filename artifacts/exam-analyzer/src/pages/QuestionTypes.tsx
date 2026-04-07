@@ -11,6 +11,7 @@ const MODULE_OPTIONS = ["", "Module 1", "Module 2"];
 
 interface RowEntry extends QuestionTypeEntry {
   module?: string;
+  keyPoint?: string;
 }
 
 export default function QuestionTypesPage() {
@@ -53,7 +54,7 @@ export default function QuestionTypesPage() {
 
   const handleAdd = () => {
     const nextQ = mappings.length > 0 ? Math.max(...mappings.map(m => m.questionNumber)) + 1 : 1;
-    setMappings([...mappings, { questionNumber: nextQ, questionType: "", module: "" }]);
+    setMappings([...mappings, { questionNumber: nextQ, questionType: "", module: "", keyPoint: "" }]);
   };
 
   const handleRemove = (index: number) => {
@@ -264,9 +265,10 @@ export default function QuestionTypesPage() {
               {/* Table */}
               <div className="px-6 py-4">
                 {/* Column headers */}
-                <div className="grid grid-cols-[80px_1fr_140px_40px] gap-3 px-1 mb-2 text-xs font-medium text-muted-foreground">
+                <div className="grid grid-cols-[72px_1fr_1fr_130px_36px] gap-2 px-1 mb-2 text-xs font-medium text-muted-foreground">
                   <div>题号</div>
                   <div>考察知识点 / 题型名称</div>
+                  <div>考点</div>
                   <div>Module</div>
                   <div></div>
                 </div>
@@ -288,7 +290,7 @@ export default function QuestionTypesPage() {
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
                           exit={{ opacity: 0, height: 0 }}
-                          className="grid grid-cols-[80px_1fr_140px_40px] gap-3 items-center"
+                          className="grid grid-cols-[72px_1fr_1fr_130px_36px] gap-2 items-center"
                         >
                           <input
                             type="number"
@@ -302,7 +304,14 @@ export default function QuestionTypesPage() {
                             type="text"
                             value={row.questionType}
                             onChange={(e) => handleUpdate(idx, "questionType", e.target.value)}
-                            placeholder="如: 词汇、代数、阅读推断…"
+                            placeholder="如: 词汇、代数…"
+                            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                          />
+                          <input
+                            type="text"
+                            value={row.keyPoint || ""}
+                            onChange={(e) => handleUpdate(idx, "keyPoint", e.target.value)}
+                            placeholder="如: 同义替换、二次方程…"
                             className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
                           />
                           <select
