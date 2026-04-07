@@ -103,7 +103,6 @@ export default function ParserPage() {
       const data = JSON.parse(jsonInput.trim()) as ParseExamResponse;
       if (!data.students || !Array.isArray(data.students)) throw new Error("格式不正确");
       const normalized: ParseExamResponse = {
-        examTitle: data.examTitle,
         totalStudents: data.students.length,
         students: data.students.map((s: StudentResult) => ({
           studentName: s.studentName,
@@ -124,9 +123,8 @@ export default function ParserPage() {
     try {
       await exportService.downloadCsv({
         students: parsedData.students,
-        examTitle: parsedData.examTitle,
         questionTypeMappings: mappings,
-      }, `${parsedData.examTitle || "模考结果"}.csv`);
+      }, "模考结果.csv");
       toast({ title: "导出成功", description: "CSV 文件已开始下载" });
     } catch {
       toast({ title: "导出失败", description: "生成 CSV 文件时发生错误", variant: "destructive" });
@@ -200,7 +198,7 @@ export default function ParserPage() {
         <textarea
           value={jsonInput}
           onChange={(e) => setJsonInput(e.target.value)}
-          placeholder={`{\n  "examTitle": "2025 SAT 模考",\n  "students": [\n    { "studentName": "张三", "wrongQuestions": [1, 5, 12] }\n  ]\n}`}
+          placeholder={`{\n  "students": [\n    { "studentName": "张三", "wrongQuestions": [1, 5, 12] }\n  ]\n}`}
           className="w-full h-44 p-4 rounded-xl bg-secondary/30 border border-border/60 font-mono text-sm text-foreground/80 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all resize-none"
         />
         <div className="mt-4 flex justify-end">
@@ -225,13 +223,7 @@ export default function ParserPage() {
             className="flex flex-col gap-5"
           >
             {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex flex-col justify-center">
-                <span className="text-sm text-muted-foreground font-medium mb-1">考试名称</span>
-                <span className="text-base font-bold text-foreground truncate" title={parsedData.examTitle || "未识别到标题"}>
-                  {parsedData.examTitle || "未识别到标题"}
-                </span>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
                   <Users className="w-6 h-6" />
