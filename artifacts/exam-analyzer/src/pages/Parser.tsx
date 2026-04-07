@@ -21,6 +21,10 @@ import { Link } from "wouter";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function distinctTypes(items: { entry: QuestionTypeEntry }[]): string[] {
+  return [...new Set(items.map(({ entry }) => entry.questionType).filter(Boolean))];
+}
+
 function buildAnalysisSentence(
   student: StudentResult,
   mappings: QuestionTypeEntry[]
@@ -28,40 +32,44 @@ function buildAnalysisSentence(
   const configMap = new Map<number, QuestionTypeEntry>();
   for (const m of mappings) configMap.set(m.questionNumber, m);
 
-  // Only consider wrong questions that are in the config
   const wrongInConfig = student.wrongQuestions
     .map(q => ({ q, entry: configMap.get(q) }))
     .filter(({ entry }) => !!entry) as { q: number; entry: QuestionTypeEntry }[];
 
-  // Count by module
-  const m1 = wrongInConfig.filter(({ entry }) => entry.module === "Module 1").length;
-  const m2 = wrongInConfig.filter(({ entry }) => entry.module === "Module 2").length;
+  const m1Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 1");
+  const m2Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
 
-  // Collect distinct keyPoints of wrong questions (non-empty)
   const keyPoints = [...new Set(
     wrongInConfig
       .map(({ entry }) => entry.keyPoint)
       .filter((kp): kp is string => !!kp && kp.trim() !== "")
   )];
 
-  const parts: string[] = [];
+  let sentence = student.studentName;
 
-  if (m1 > 0 || m2 > 0) {
-    const moduleParts: string[] = [];
-    if (m1 > 0) moduleParts.push(`Module 1 错了 ${m1} 题`);
-    if (m2 > 0) moduleParts.push(`Module 2 错了 ${m2} 题`);
-    parts.push(`${student.studentName}${moduleParts.join("，")}`);
+  if (m1Items.length > 0 || m2Items.length > 0) {
+    const parts: string[] = [];
+    if (m1Items.length > 0) {
+      const types = distinctTypes(m1Items);
+      parts.push(`在 Module 1 错了 ${m1Items.length} 题，分别是${types.join("、")}`);
+    }
+    if (m2Items.length > 0) {
+      const types = distinctTypes(m2Items);
+      parts.push(`Module 2 错了 ${m2Items.length} 题，分别是${types.join("、")}`);
+    }
+    sentence += parts.join("，");
   } else if (wrongInConfig.length > 0) {
-    parts.push(`${student.studentName}在配置范围内错了 ${wrongInConfig.length} 题`);
+    sentence += `在配置范围内错了 ${wrongInConfig.length} 题`;
   } else {
-    parts.push(`${student.studentName}在本次配置范围内未出现错题`);
+    sentence += "在本次配置范围内未出现错题";
+    return sentence;
   }
 
   if (keyPoints.length > 0) {
-    parts[0] += `。注意错题的考点：${keyPoints.join("、")}`;
+    sentence += `，注意${keyPoints.join("、")}`;
   }
 
-  return parts[0];
+  return sentence;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -285,11 +293,15 @@ export default function ParserPage() {
                       .map(q => ({ q, entry: configMap.get(q) }))
                       .filter(({ entry }) => !!entry) as { q: number; entry: QuestionTypeEntry }[];
 
-                    const m1Wrong = wrongInConfig.filter(({ entry }) => entry.module === "Module 1");
-                    const m2Wrong = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
+                    const m1Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 1");
+                    const m2Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
+                    const m1Types = distinctTypes(m1Items);
+                    const m2Types = distinctTypes(m2Items);
                     const keyPoints = [...new Set(
                       wrongInConfig.map(({ entry }) => entry.keyPoint).filter((kp): kp is string => !!kp && kp.trim() !== "")
                     )];
+
+                    const hasModuleData = m1Items.length > 0 || m2Items.length > 0;
 
                     return (
                       <motion.div
@@ -297,47 +309,42 @@ export default function ParserPage() {
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.04 }}
-                        className="px-5 py-4 flex flex-col gap-2"
+                        className="px-5 py-4 flex items-start gap-3"
                       >
-                        <div className="flex items-start gap-3">
-                          <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                          <div className="flex-1">
-                            <p className="text-sm text-foreground leading-relaxed">
-                              <span className="font-semibold">{student.studentName}</span>
-                              {(m1Wrong.length > 0 || m2Wrong.length > 0) ? (
-                                <>
-                                  {m1Wrong.length > 0 && (
-                                    <> 在 <span className="font-medium text-blue-600">Module 1</span> 错了{" "}
-                                    <span className="font-bold text-rose-600">{m1Wrong.length}</span> 题</>
-                                  )}
-                                  {m1Wrong.length > 0 && m2Wrong.length > 0 && "，"}
-                                  {m2Wrong.length > 0 && (
-                                    <><span className="font-medium text-indigo-600">Module 2</span> 错了{" "}
-                                    <span className="font-bold text-rose-600">{m2Wrong.length}</span> 题</>
-                                  )}
-                                  。
-                                </>
-                              ) : wrongInConfig.length > 0 ? (
-                                <> 在配置范围内错了 <span className="font-bold text-rose-600">{wrongInConfig.length}</span> 题。</>
-                              ) : (
-                                <span className="text-muted-foreground"> 本次配置范围内未出现错题。</span>
+                        <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <p className="text-sm text-foreground leading-relaxed flex-1">
+                          <span className="font-semibold">{student.studentName}</span>
+                          {hasModuleData ? (
+                            <>
+                              {m1Items.length > 0 && (
+                                <>在 <span className="font-medium text-blue-600">Module 1</span> 错了{" "}
+                                <span className="font-bold text-rose-600">{m1Items.length}</span> 题，分别是
+                                <span className="text-blue-700">{m1Types.join("、")}</span></>
                               )}
-                            </p>
-                            {keyPoints.length > 0 && (
-                              <p className="text-sm text-foreground mt-1">
-                                <span className="text-muted-foreground">注意错题的考点：</span>
+                              {m1Items.length > 0 && m2Items.length > 0 && "，"}
+                              {m2Items.length > 0 && (
+                                <><span className="font-medium text-indigo-600">Module 2</span> 错了{" "}
+                                <span className="font-bold text-rose-600">{m2Items.length}</span> 题，分别是
+                                <span className="text-indigo-700">{m2Types.join("、")}</span></>
+                              )}
+                              {keyPoints.length > 0 ? (
+                                <>，注意
                                 {keyPoints.map((kp, i) => (
                                   <span key={i}>
                                     <span className="text-violet-700 font-medium">{kp}</span>
                                     {i < keyPoints.length - 1 && <span className="text-muted-foreground">、</span>}
                                   </span>
-                                ))}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                                ))}</>
+                              ) : null}
+                            </>
+                          ) : wrongInConfig.length > 0 ? (
+                            <> 在配置范围内错了 <span className="font-bold text-rose-600">{wrongInConfig.length}</span> 题</>
+                          ) : (
+                            <span className="text-muted-foreground">在本次配置范围内未出现错题</span>
+                          )}
+                        </p>
                       </motion.div>
                     );
                   })}
