@@ -41,8 +41,8 @@ function buildAnalysisSentence(
 
   const keyPoints = [...new Set(
     wrongInConfig
-      .map(({ entry }) => entry.keyPoint)
-      .filter((kp): kp is string => !!kp && kp.trim() !== "")
+      .map(({ entry }) => entry.keyPoint?.trim())
+      .filter((kp): kp is string => !!kp && kp !== "")
   )];
 
   let sentence = student.studentName;
@@ -317,7 +317,7 @@ export default function ParserPage() {
                     const m1Types = distinctTypes(m1Items);
                     const m2Types = distinctTypes(m2Items);
                     const keyPoints = [...new Set(
-                      wrongInConfig.map(({ entry }) => entry.keyPoint).filter((kp): kp is string => !!kp && kp.trim() !== "")
+                      wrongInConfig.map(({ entry }) => entry.keyPoint?.trim()).filter((kp): kp is string => !!kp && kp !== "")
                     )];
 
                     const hasModuleData = m1Items.length > 0 || m2Items.length > 0;
