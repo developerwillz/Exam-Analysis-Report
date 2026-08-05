@@ -6,9 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface QuestionTypeEntry {
-  questionNumber: number;
-  questionType: string;
-  module?: string;
-  keyPoint?: string;
+export interface ConfigSummary {
+  name: string;
+  count: number;
 }

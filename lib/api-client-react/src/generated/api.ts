@@ -18,10 +18,13 @@ import type {
 
 import type {
   ExportCsvRequest,
+  GetQuestionTypesParams,
   HealthStatus,
   ListConfigsResponse,
   ParseExamRequest,
   ParseExamResponse,
+  PolishFeedbackRequest,
+  PolishFeedbackResponse,
   QuestionTypeMapping,
   SuccessResponse,
 } from "./api.schemas";
@@ -35,26 +38,46 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
-// ── Health check ─────────────────────────────────────────────────────────────
+/**
+ * Returns server health status
+ * @summary Health check
+ */
+export const getHealthCheckUrl = () => {
+  return `/api/healthz`;
+};
 
-export const getHealthCheckUrl = () => `/api/healthz`;
+export const healthCheck = async (
+  options?: RequestInit,
+): Promise<HealthStatus> => {
+  return customFetch<HealthStatus>(getHealthCheckUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
 
-export const healthCheck = async (options?: RequestInit): Promise<HealthStatus> =>
-  customFetch<HealthStatus>(getHealthCheckUrl(), { ...options, method: "GET" });
-
-export const getHealthCheckQueryKey = () => [`/api/healthz`] as const;
+export const getHealthCheckQueryKey = () => {
+  return [`/api/healthz`] as const;
+};
 
 export const getHealthCheckQueryOptions = <
   TData = Awaited<ReturnType<typeof healthCheck>>,
   TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>;
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthCheck>>,
+    TError,
+    TData
+  >;
   request?: SecondParameter<typeof customFetch>;
 }) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
+
   const queryKey = queryOptions?.queryKey ?? getHealthCheckQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof healthCheck>>> = ({ signal }) =>
-    healthCheck({ signal, ...requestOptions });
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof healthCheck>>> = ({
+    signal,
+  }) => healthCheck({ signal, ...requestOptions });
+
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof healthCheck>>,
     TError,
@@ -62,35 +85,54 @@ export const getHealthCheckQueryOptions = <
   > & { queryKey: QueryKey };
 };
 
-export type HealthCheckQueryResult = NonNullable<Awaited<ReturnType<typeof healthCheck>>>;
+export type HealthCheckQueryResult = NonNullable<
+  Awaited<ReturnType<typeof healthCheck>>
+>;
 export type HealthCheckQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Health check
+ */
 
 export function useHealthCheck<
   TData = Awaited<ReturnType<typeof healthCheck>>,
   TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>;
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthCheck>>,
+    TError,
+    TData
+  >;
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-// ── Parse exam HTML ───────────────────────────────────────────────────────────
-
-export const getParseExamHtmlUrl = () => `/api/exam/parse`;
+/**
+ * Parse the HTML from teacher page and extract student wrong answers
+ * @summary Parse exam HTML page
+ */
+export const getParseExamHtmlUrl = () => {
+  return `/api/exam/parse`;
+};
 
 export const parseExamHtml = async (
   parseExamRequest: ParseExamRequest,
   options?: RequestInit,
-): Promise<ParseExamResponse> =>
-  customFetch<ParseExamResponse>(getParseExamHtmlUrl(), {
+): Promise<ParseExamResponse> => {
+  return customFetch<ParseExamResponse>(getParseExamHtmlUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
     body: JSON.stringify(parseExamRequest),
   });
+};
 
 export const getParseExamHtmlMutationOptions = <
   TError = ErrorType<unknown>,
@@ -111,21 +153,34 @@ export const getParseExamHtmlMutationOptions = <
 > => {
   const mutationKey = ["parseExamHtml"];
   const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
     : { mutation: { mutationKey }, request: undefined };
+
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof parseExamHtml>>,
     { data: BodyType<ParseExamRequest> }
-  > = (props) => parseExamHtml(props.data, requestOptions);
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return parseExamHtml(data, requestOptions);
+  };
+
   return { mutationFn, ...mutationOptions };
 };
 
-export type ParseExamHtmlMutationResult = NonNullable<Awaited<ReturnType<typeof parseExamHtml>>>;
+export type ParseExamHtmlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseExamHtml>>
+>;
 export type ParseExamHtmlMutationBody = BodyType<ParseExamRequest>;
 export type ParseExamHtmlMutationError = ErrorType<unknown>;
 
+/**
+ * @summary Parse exam HTML page
+ */
 export const useParseExamHtml = <
   TError = ErrorType<unknown>,
   TContext = unknown,
@@ -142,22 +197,29 @@ export const useParseExamHtml = <
   TError,
   { data: BodyType<ParseExamRequest> },
   TContext
-> => useMutation(getParseExamHtmlMutationOptions(options));
+> => {
+  return useMutation(getParseExamHtmlMutationOptions(options));
+};
 
-// ── Export CSV ────────────────────────────────────────────────────────────────
-
-export const getExportCsvUrl = () => `/api/exam/export-csv`;
+/**
+ * Generate CSV from student wrong answers with optional question type mapping
+ * @summary Export exam results as CSV
+ */
+export const getExportCsvUrl = () => {
+  return `/api/exam/export-csv`;
+};
 
 export const exportCsv = async (
   exportCsvRequest: ExportCsvRequest,
   options?: RequestInit,
-): Promise<string> =>
-  customFetch<string>(getExportCsvUrl(), {
+): Promise<string> => {
+  return customFetch<string>(getExportCsvUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
     body: JSON.stringify(exportCsvRequest),
   });
+};
 
 export const getExportCsvMutationOptions = <
   TError = ErrorType<unknown>,
@@ -178,21 +240,34 @@ export const getExportCsvMutationOptions = <
 > => {
   const mutationKey = ["exportCsv"];
   const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
     : { mutation: { mutationKey }, request: undefined };
+
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof exportCsv>>,
     { data: BodyType<ExportCsvRequest> }
-  > = (props) => exportCsv(props.data, requestOptions);
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return exportCsv(data, requestOptions);
+  };
+
   return { mutationFn, ...mutationOptions };
 };
 
-export type ExportCsvMutationResult = NonNullable<Awaited<ReturnType<typeof exportCsv>>>;
+export type ExportCsvMutationResult = NonNullable<
+  Awaited<ReturnType<typeof exportCsv>>
+>;
 export type ExportCsvMutationBody = BodyType<ExportCsvRequest>;
 export type ExportCsvMutationError = ErrorType<unknown>;
 
+/**
+ * @summary Export exam results as CSV
+ */
 export const useExportCsv = <
   TError = ErrorType<unknown>,
   TContext = unknown,
@@ -209,80 +284,154 @@ export const useExportCsv = <
   TError,
   { data: BodyType<ExportCsvRequest> },
   TContext
-> => useMutation(getExportCsvMutationOptions(options));
-
-// ── List configs ──────────────────────────────────────────────────────────────
-
-export const getListConfigsUrl = () => `/api/exam/question-types/configs`;
-
-export const listConfigs = async (options?: RequestInit): Promise<ListConfigsResponse> =>
-  customFetch<ListConfigsResponse>(getListConfigsUrl(), { ...options, method: "GET" });
-
-export const getListConfigsQueryKey = () => [`/api/exam/question-types/configs`] as const;
-
-export const getListConfigsQueryOptions = <
-  TData = Awaited<ReturnType<typeof listConfigs>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof listConfigs>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getListConfigsQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof listConfigs>>> = ({ signal }) =>
-    listConfigs({ signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listConfigs>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
+> => {
+  return useMutation(getExportCsvMutationOptions(options));
 };
 
-export type ListConfigsQueryResult = NonNullable<Awaited<ReturnType<typeof listConfigs>>>;
-export type ListConfigsQueryError = ErrorType<unknown>;
+/**
+ * @summary Polish student feedback with GLM
+ */
+export const getPolishFeedbackUrl = () => {
+  return `/api/exam/polish-feedback`;
+};
 
-export function useListConfigs<
-  TData = Awaited<ReturnType<typeof listConfigs>>,
+export const polishFeedback = async (
+  polishFeedbackRequest: PolishFeedbackRequest,
+  options?: RequestInit,
+): Promise<PolishFeedbackResponse> => {
+  return customFetch<PolishFeedbackResponse>(getPolishFeedbackUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(polishFeedbackRequest),
+  });
+};
+
+export const getPolishFeedbackMutationOptions = <
   TError = ErrorType<unknown>,
+  TContext = unknown,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof listConfigs>>, TError, TData>;
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof polishFeedback>>,
+    TError,
+    { data: BodyType<PolishFeedbackRequest> },
+    TContext
+  >;
   request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListConfigsQueryOptions(options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey: queryOptions.queryKey };
-}
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof polishFeedback>>,
+  TError,
+  { data: BodyType<PolishFeedbackRequest> },
+  TContext
+> => {
+  const mutationKey = ["polishFeedback"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
 
-// ── Get question types (by name) ──────────────────────────────────────────────
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof polishFeedback>>,
+    { data: BodyType<PolishFeedbackRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
 
-export const getGetQuestionTypesUrl = (name?: string) =>
-  name ? `/api/exam/question-types?name=${encodeURIComponent(name)}` : `/api/exam/question-types`;
+    return polishFeedback(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PolishFeedbackMutationResult = NonNullable<
+  Awaited<ReturnType<typeof polishFeedback>>
+>;
+export type PolishFeedbackMutationBody = BodyType<PolishFeedbackRequest>;
+export type PolishFeedbackMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Polish student feedback with GLM
+ */
+export const usePolishFeedback = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof polishFeedback>>,
+    TError,
+    { data: BodyType<PolishFeedbackRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof polishFeedback>>,
+  TError,
+  { data: BodyType<PolishFeedbackRequest> },
+  TContext
+> => {
+  return useMutation(getPolishFeedbackMutationOptions(options));
+};
+
+/**
+ * @summary Get saved question type mapping
+ */
+export const getGetQuestionTypesUrl = (params?: GetQuestionTypesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/exam/question-types?${stringifiedParams}`
+    : `/api/exam/question-types`;
+};
 
 export const getQuestionTypes = async (
-  name?: string,
+  params?: GetQuestionTypesParams,
   options?: RequestInit,
-): Promise<QuestionTypeMapping> =>
-  customFetch<QuestionTypeMapping>(getGetQuestionTypesUrl(name), { ...options, method: "GET" });
+): Promise<QuestionTypeMapping> => {
+  return customFetch<QuestionTypeMapping>(getGetQuestionTypesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
 
-export const getGetQuestionTypesQueryKey = (name?: string) =>
-  name
-    ? ([`/api/exam/question-types`, name] as const)
-    : ([`/api/exam/question-types`] as const);
+export const getGetQuestionTypesQueryKey = (
+  params?: GetQuestionTypesParams,
+) => {
+  return [`/api/exam/question-types`, ...(params ? [params] : [])] as const;
+};
 
 export const getGetQuestionTypesQueryOptions = <
   TData = Awaited<ReturnType<typeof getQuestionTypes>>,
   TError = ErrorType<unknown>,
 >(
-  name?: string,
+  params?: GetQuestionTypesParams,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getQuestionTypes>>, TError, TData>;
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQuestionTypes>>,
+      TError,
+      TData
+    >;
     request?: SecondParameter<typeof customFetch>;
   },
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetQuestionTypesQueryKey(name);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getQuestionTypes>>> = ({ signal }) =>
-    getQuestionTypes(name, { signal, ...requestOptions });
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetQuestionTypesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getQuestionTypes>>
+  > = ({ signal }) => getQuestionTypes(params, { signal, ...requestOptions });
+
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getQuestionTypes>>,
     TError,
@@ -290,38 +439,56 @@ export const getGetQuestionTypesQueryOptions = <
   > & { queryKey: QueryKey };
 };
 
-export type GetQuestionTypesQueryResult = NonNullable<Awaited<ReturnType<typeof getQuestionTypes>>>;
+export type GetQuestionTypesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getQuestionTypes>>
+>;
 export type GetQuestionTypesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get saved question type mapping
+ */
 
 export function useGetQuestionTypes<
   TData = Awaited<ReturnType<typeof getQuestionTypes>>,
   TError = ErrorType<unknown>,
 >(
-  name?: string,
+  params?: GetQuestionTypesParams,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getQuestionTypes>>, TError, TData>;
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQuestionTypes>>,
+      TError,
+      TData
+    >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetQuestionTypesQueryOptions(name, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const queryOptions = getGetQuestionTypesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-// ── Save question types ───────────────────────────────────────────────────────
-
-export const getSaveQuestionTypesUrl = () => `/api/exam/question-types`;
+/**
+ * @summary Save question type mapping
+ */
+export const getSaveQuestionTypesUrl = () => {
+  return `/api/exam/question-types`;
+};
 
 export const saveQuestionTypes = async (
   questionTypeMapping: QuestionTypeMapping,
   options?: RequestInit,
-): Promise<SuccessResponse> =>
-  customFetch<SuccessResponse>(getSaveQuestionTypesUrl(), {
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSaveQuestionTypesUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
     body: JSON.stringify(questionTypeMapping),
   });
+};
 
 export const getSaveQuestionTypesMutationOptions = <
   TError = ErrorType<unknown>,
@@ -342,21 +509,34 @@ export const getSaveQuestionTypesMutationOptions = <
 > => {
   const mutationKey = ["saveQuestionTypes"];
   const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
     : { mutation: { mutationKey }, request: undefined };
+
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof saveQuestionTypes>>,
     { data: BodyType<QuestionTypeMapping> }
-  > = (props) => saveQuestionTypes(props.data, requestOptions);
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveQuestionTypes(data, requestOptions);
+  };
+
   return { mutationFn, ...mutationOptions };
 };
 
-export type SaveQuestionTypesMutationResult = NonNullable<Awaited<ReturnType<typeof saveQuestionTypes>>>;
+export type SaveQuestionTypesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveQuestionTypes>>
+>;
 export type SaveQuestionTypesMutationBody = BodyType<QuestionTypeMapping>;
 export type SaveQuestionTypesMutationError = ErrorType<unknown>;
 
+/**
+ * @summary Save question type mapping
+ */
 export const useSaveQuestionTypes = <
   TError = ErrorType<unknown>,
   TContext = unknown,
@@ -373,18 +553,101 @@ export const useSaveQuestionTypes = <
   TError,
   { data: BodyType<QuestionTypeMapping> },
   TContext
-> => useMutation(getSaveQuestionTypesMutationOptions(options));
+> => {
+  return useMutation(getSaveQuestionTypesMutationOptions(options));
+};
 
-// ── Delete config ─────────────────────────────────────────────────────────────
+/**
+ * @summary List all saved configs
+ */
+export const getListConfigsUrl = () => {
+  return `/api/exam/question-types/configs`;
+};
 
-export const getDeleteConfigUrl = (name: string) =>
-  `/api/exam/question-types/${encodeURIComponent(name)}`;
+export const listConfigs = async (
+  options?: RequestInit,
+): Promise<ListConfigsResponse> => {
+  return customFetch<ListConfigsResponse>(getListConfigsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListConfigsQueryKey = () => {
+  return [`/api/exam/question-types/configs`] as const;
+};
+
+export const getListConfigsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listConfigs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listConfigs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListConfigsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listConfigs>>> = ({
+    signal,
+  }) => listConfigs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listConfigs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListConfigsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listConfigs>>
+>;
+export type ListConfigsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all saved configs
+ */
+
+export function useListConfigs<
+  TData = Awaited<ReturnType<typeof listConfigs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listConfigs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListConfigsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete a saved config
+ */
+export const getDeleteConfigUrl = (name: string) => {
+  return `/api/exam/question-types/${name}`;
+};
 
 export const deleteConfig = async (
   name: string,
   options?: RequestInit,
-): Promise<SuccessResponse> =>
-  customFetch<SuccessResponse>(getDeleteConfigUrl(name), { ...options, method: "DELETE" });
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDeleteConfigUrl(name), {
+    ...options,
+    method: "DELETE",
+  });
+};
 
 export const getDeleteConfigMutationOptions = <
   TError = ErrorType<unknown>,
@@ -405,20 +668,34 @@ export const getDeleteConfigMutationOptions = <
 > => {
   const mutationKey = ["deleteConfig"];
   const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
     : { mutation: { mutationKey }, request: undefined };
+
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteConfig>>,
     { name: string }
-  > = (props) => deleteConfig(props.name, requestOptions);
+  > = (props) => {
+    const { name } = props ?? {};
+
+    return deleteConfig(name, requestOptions);
+  };
+
   return { mutationFn, ...mutationOptions };
 };
 
-export type DeleteConfigMutationResult = NonNullable<Awaited<ReturnType<typeof deleteConfig>>>;
+export type DeleteConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteConfig>>
+>;
+
 export type DeleteConfigMutationError = ErrorType<unknown>;
 
+/**
+ * @summary Delete a saved config
+ */
 export const useDeleteConfig = <
   TError = ErrorType<unknown>,
   TContext = unknown,
@@ -435,4 +712,6 @@ export const useDeleteConfig = <
   TError,
   { name: string },
   TContext
-> => useMutation(getDeleteConfigMutationOptions(options));
+> => {
+  return useMutation(getDeleteConfigMutationOptions(options));
+};

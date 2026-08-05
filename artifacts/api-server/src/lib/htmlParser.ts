@@ -153,7 +153,7 @@ export function parseExamHtml(html: string): ParsedExamData {
       
       // First cell is usually student name
       const nameCell = cells[0];
-      const nameText = nameCell.replace(/<[^>]+>/g, '').trim();
+      const nameText = (nameCell ?? '').replace(/<[^>]+>/g, '').trim();
       if (!nameText || nameText.length < 2 || nameText.length > 25) return;
       if (!/[\u4e00-\u9fff]/.test(nameText) && !/[A-Z][a-z]/.test(nameText)) return;
       

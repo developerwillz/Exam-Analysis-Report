@@ -122,7 +122,7 @@ export default function QuestionTypesPage() {
             题型匹配设置
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            保存多套题号→知识点映射，解析时按需选择应用于导出 CSV。
+            保存多套题号→反馈预设，只有这里配置的题号会进入模考反馈。
           </p>
         </div>
         <button
@@ -259,7 +259,7 @@ export default function QuestionTypesPage() {
               {/* Hint */}
               <div className="mx-6 mt-4 flex items-start gap-2 p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-800">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-500" />
-                <p>填写题号、对应的考察知识点（如「词汇题」「代数」），并选择 Module。解析错题后导出 CSV 时会自动打标签。</p>
+                <p>填写需要反馈的题号、题型和反馈预设，并选择 Module。未添加的题号不会进入反馈或发送给 AI。</p>
               </div>
 
               {/* Table */}
@@ -268,7 +268,7 @@ export default function QuestionTypesPage() {
                 <div className="grid grid-cols-[72px_1fr_1fr_130px_36px] gap-2 px-1 mb-2 text-xs font-medium text-muted-foreground">
                   <div>题号</div>
                   <div>考察知识点 / 题型名称</div>
-                  <div>考点</div>
+                  <div>反馈预设</div>
                   <div>Module</div>
                   <div></div>
                 </div>
@@ -311,7 +311,7 @@ export default function QuestionTypesPage() {
                             type="text"
                             value={row.keyPoint || ""}
                             onChange={(e) => handleUpdate(idx, "keyPoint", e.target.value)}
-                            placeholder="如: 同义替换、二次方程…"
+                            placeholder="如: 注意结合上下文判断词义…"
                             className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
                           />
                           <select

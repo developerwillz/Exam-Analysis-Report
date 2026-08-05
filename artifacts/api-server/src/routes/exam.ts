@@ -3,9 +3,11 @@ import {
   ParseExamHtmlBody,
   ExportCsvBody,
   SaveQuestionTypesBody,
+  PolishFeedbackBody,
 } from "@workspace/api-zod";
 import { parseExamHtml } from "../lib/htmlParser.js";
 import { generateCsv } from "../lib/csvExporter.js";
+import { polishFeedback } from "../lib/feedbackPolisher.js";
 import { db } from "@workspace/db";
 import { questionTypeMappingsTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -42,6 +44,21 @@ router.post("/export-csv", (req, res) => {
   } catch (err) {
     console.error("CSV export error:", err);
     res.status(400).json({ error: "Failed to generate CSV", details: String(err) });
+  }
+});
+
+// POST /api/exam/polish-feedback — only configured question numbers are sent to GLM
+router.post("/polish-feedback", async (req, res) => {
+  try {
+    const body = PolishFeedbackBody.parse(req.body);
+    const feedbacks = await polishFeedback(body.students, body.questionTypeMappings);
+    res.json({ feedbacks });
+  } catch (err) {
+    console.error("Feedback polish error:", err);
+    const missingKey = err instanceof Error && err.message.includes("ZHIPU_API_KEY");
+    res.status(missingKey ? 503 : 502).json({
+      error: missingKey ? "智谱 API Key 尚未配置" : "AI 润色暂时不可用",
+    });
   }
 });
 

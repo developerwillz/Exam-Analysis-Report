@@ -63,13 +63,32 @@ export const ExportCsvBody = zod.object({
 });
 
 /**
- * @summary List all saved configs
+ * @summary Polish student feedback with GLM
  */
-export const ListConfigsResponse = zod.object({
-  configs: zod.array(
+export const PolishFeedbackBody = zod.object({
+  students: zod.array(
     zod.object({
-      name: zod.string(),
-      count: zod.number(),
+      studentName: zod.string(),
+      wrongQuestions: zod.array(zod.number()),
+      totalQuestions: zod.number().optional(),
+      score: zod.string().optional(),
+    }),
+  ),
+  questionTypeMappings: zod.array(
+    zod.object({
+      questionNumber: zod.number(),
+      questionType: zod.string(),
+      module: zod.string().optional(),
+      keyPoint: zod.string().optional(),
+    }),
+  ),
+});
+
+export const PolishFeedbackResponse = zod.object({
+  feedbacks: zod.array(
+    zod.object({
+      studentName: zod.string(),
+      feedback: zod.string(),
     }),
   ),
 });
@@ -77,6 +96,10 @@ export const ListConfigsResponse = zod.object({
 /**
  * @summary Get saved question type mapping
  */
+export const GetQuestionTypesQueryParams = zod.object({
+  name: zod.coerce.string().optional(),
+});
+
 export const GetQuestionTypesResponse = zod.object({
   mappings: zod.array(
     zod.object({
@@ -105,6 +128,30 @@ export const SaveQuestionTypesBody = zod.object({
 });
 
 export const SaveQuestionTypesResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary List all saved configs
+ */
+export const ListConfigsResponse = zod.object({
+  configs: zod.array(
+    zod.object({
+      name: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Delete a saved config
+ */
+export const DeleteConfigParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const DeleteConfigResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
 });

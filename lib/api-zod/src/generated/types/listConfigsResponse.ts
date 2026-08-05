@@ -5,10 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ConfigSummary } from "./configSummary";
 
-export interface QuestionTypeEntry {
-  questionNumber: number;
-  questionType: string;
-  module?: string;
-  keyPoint?: string;
+export interface ListConfigsResponse {
+  configs: ConfigSummary[];
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useExamTypes, useExamConfigs, useCsvExport } from "@/hooks/use-exam";
+import { useExamTypes, useExamConfigs, useCsvExport, useFeedbackPolisher } from "@/hooks/use-exam";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -15,6 +15,7 @@ import {
   Copy,
   Check,
   FileText,
+  Sparkles,
 } from "lucide-react";
 import type { ParseExamResponse, StudentResult, QuestionTypeEntry } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -25,6 +26,27 @@ function distinctTypes(items: { entry: QuestionTypeEntry }[]): string[] {
   return [...new Set(items.map(({ entry }) => entry.questionType).filter(Boolean))];
 }
 
+/** 按题型分组，保留每道题的 keyPoint（有则留，无则跳过）。 */
+function buildTypeKeyPoints(
+  items: { q: number; entry: QuestionTypeEntry }[]
+): { type: string; points: string[] }[] {
+  const typeMap = new Map<string, string[]>();
+  const typeOrder: string[] = [];
+  for (const { entry } of items) {
+    const type = entry.questionType;
+    const kp = entry.keyPoint?.trim() || "";
+    if (!typeMap.has(type)) {
+      typeMap.set(type, []);
+      typeOrder.push(type);
+    }
+    if (kp) typeMap.get(type)!.push(kp);
+  }
+  return typeOrder
+    .map(type => ({ type, points: typeMap.get(type)! }))
+    .filter(({ points }) => points.length > 0);
+}
+
+/** 用于复制到剪贴板的纯文本句子。 */
 function buildAnalysisSentence(
   student: StudentResult,
   mappings: QuestionTypeEntry[]
@@ -39,25 +61,21 @@ function buildAnalysisSentence(
   const m1Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 1");
   const m2Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
 
-  const keyPoints = [...new Set(
-    wrongInConfig
-      .map(({ entry }) => entry.keyPoint)
-      .filter((kp): kp is string => !!kp && kp.trim() !== "")
-  )];
-
   let sentence = student.studentName;
 
   if (m1Items.length > 0 || m2Items.length > 0) {
     const parts: string[] = [];
     if (m1Items.length > 0) {
       const types = distinctTypes(m1Items);
-      parts.push(`在 Module 1 错了 ${m1Items.length} 题，分别是${types.join("、")}`);
+      const connector = m1Items.length === 1 ? "是" : "涉及";
+      parts.push(`在 Module 1 错了 ${m1Items.length} 题，${connector}${types.join("、")}`);
     }
     if (m2Items.length > 0) {
       const types = distinctTypes(m2Items);
-      parts.push(`Module 2 错了 ${m2Items.length} 题，分别是${types.join("、")}`);
+      const connector = m2Items.length === 1 ? "是" : "涉及";
+      parts.push(`Module 2 错了 ${m2Items.length} 题，${connector}${types.join("、")}`);
     }
-    sentence += parts.join("，");
+    sentence += parts.join("；");
   } else if (wrongInConfig.length > 0) {
     sentence += `在配置范围内错了 ${wrongInConfig.length} 题`;
   } else {
@@ -65,11 +83,25 @@ function buildAnalysisSentence(
     return sentence;
   }
 
-  if (keyPoints.length > 0) {
-    sentence += `，注意${keyPoints.join("、")}`;
+  // 按题型分组建议，同类多道题用"第1道/第2道"区分
+  const typeKeyPoints = buildTypeKeyPoints(wrongInConfig);
+  if (typeKeyPoints.length > 0) {
+    const tipParts = typeKeyPoints.map(({ type, points }) => {
+      if (points.length === 1) {
+        return `${type}注意${points[0]}`;
+      }
+      const numbered = points.map((p, i) => `第${i + 1}道注意${p}`).join("，");
+      return `${type}（共${points.length}道）：${numbered}`;
+    });
+    sentence += `。建议：${tipParts.join("；")}`;
   }
 
   return sentence;
+}
+
+function countConfiguredWrongQuestions(student: StudentResult, mappings: QuestionTypeEntry[]): number {
+  const configured = new Set(mappings.map(m => m.questionNumber));
+  return student.wrongQuestions.filter(q => configured.has(q)).length;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -93,6 +125,7 @@ export default function ParserPage() {
     () => localStorage.getItem(LS_CONFIG_KEY) ?? ""
   );
   const [copiedReport, setCopiedReport] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<Record<string, string>>({});
 
   // Persist parsed data across page navigation
   useEffect(() => {
@@ -105,10 +138,12 @@ export default function ParserPage() {
 
   useEffect(() => {
     localStorage.setItem(LS_CONFIG_KEY, selectedConfigName);
+    setAiFeedback({});
   }, [selectedConfigName]);
 
   const { toast } = useToast();
   const exportService = useCsvExport();
+  const polishService = useFeedbackPolisher();
   const { data: configsData } = useExamConfigs();
   const { data: typesData } = useExamTypes(selectedConfigName || undefined);
 
@@ -119,6 +154,21 @@ export default function ParserPage() {
   const analysisReport = useMemo(() => {
     if (!parsedData || mappings.length === 0) return [];
     return parsedData.students.map(s => buildAnalysisSentence(s, mappings));
+  }, [parsedData, mappings]);
+
+  const displayedReport = useMemo(() => {
+    if (!parsedData) return [];
+    return parsedData.students.map((student, index) =>
+      aiFeedback[student.studentName] || analysisReport[index] || ""
+    );
+  }, [parsedData, aiFeedback, analysisReport]);
+
+  const configuredWrongTotal = useMemo(() => {
+    if (!parsedData) return 0;
+    return parsedData.students.reduce(
+      (total, student) => total + countConfiguredWrongQuestions(student, mappings),
+      0,
+    );
   }, [parsedData, mappings]);
 
   const handleParseJson = () => {
@@ -139,9 +189,33 @@ export default function ParserPage() {
         })),
       };
       setParsedData(normalized);
+      setAiFeedback({});
       toast({ title: "导入成功", description: `成功导入 ${normalized.totalStudents} 名学生的数据` });
     } catch {
       toast({ title: "格式错误", description: "JSON 格式不正确，请重新从书签工具复制", variant: "destructive" });
+    }
+  };
+
+  const handlePolishFeedback = async () => {
+    if (!parsedData || mappings.length === 0) return;
+    try {
+      const result = await polishService.mutateAsync({
+        data: { students: parsedData.students, questionTypeMappings: mappings },
+      });
+      const next = Object.fromEntries(
+        result.feedbacks.map(item => [item.studentName, item.feedback]),
+      );
+      setAiFeedback(next);
+      toast({
+        title: "AI 润色完成",
+        description: `已生成 ${result.feedbacks.length} 名学生的自然版反馈，其余继续使用模板反馈`,
+      });
+    } catch {
+      toast({
+        title: "AI 润色失败",
+        description: "已保留原有模板反馈，请检查智谱 API Key 或稍后重试",
+        variant: "destructive",
+      });
     }
   };
 
@@ -159,7 +233,7 @@ export default function ParserPage() {
   };
 
   const handleCopyReport = async () => {
-    const text = analysisReport.join("\n");
+    const text = displayedReport.join("\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopiedReport(true);
@@ -272,12 +346,11 @@ export default function ParserPage() {
                   <span className="text-2xl font-bold text-foreground">
                     {parsedData.totalStudents > 0
                       ? Math.round(
-                          (parsedData.students.reduce((acc, s) => acc + s.wrongQuestions.length, 0) /
-                            parsedData.totalStudents) *
+                          (configuredWrongTotal / parsedData.totalStudents) *
                             10
                         ) / 10
                       : 0}
-                    <span className="text-sm font-normal text-muted-foreground ml-1">题</span>
+                    <span className="text-sm font-normal text-muted-foreground ml-1">题（反馈范围）</span>
                   </span>
                 </div>
               </div>
@@ -286,22 +359,35 @@ export default function ParserPage() {
             {/* ── Analysis report ── */}
             {analysisReport.length > 0 && (
               <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden">
-                <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-primary" />
                     <h3 className="text-base font-bold text-foreground">分析报告</h3>
                     <span className="text-xs text-muted-foreground">（基于配置：{selectedConfigName}）</span>
                   </div>
-                  <button
-                    onClick={handleCopyReport}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition-colors"
-                  >
-                    {copiedReport ? (
-                      <><Check className="w-3.5 h-3.5 text-emerald-500" />已复制</>
-                    ) : (
-                      <><Copy className="w-3.5 h-3.5" />一键复制</>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handlePolishFeedback}
+                      disabled={polishService.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-60"
+                    >
+                      {polishService.isPending ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />正在润色…</>
+                      ) : (
+                        <><Sparkles className="w-3.5 h-3.5" />{Object.keys(aiFeedback).length ? "重新润色" : "使用 AI 润色"}</>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleCopyReport}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                    >
+                      {copiedReport ? (
+                        <><Check className="w-3.5 h-3.5 text-emerald-500" />已复制</>
+                      ) : (
+                        <><Copy className="w-3.5 h-3.5" />一键复制</>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="divide-y divide-border/40">
                   {parsedData.students.map((student, idx) => {
@@ -316,9 +402,7 @@ export default function ParserPage() {
                     const m2Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
                     const m1Types = distinctTypes(m1Items);
                     const m2Types = distinctTypes(m2Items);
-                    const keyPoints = [...new Set(
-                      wrongInConfig.map(({ entry }) => entry.keyPoint).filter((kp): kp is string => !!kp && kp.trim() !== "")
-                    )];
+                    const typeKeyPoints = buildTypeKeyPoints(wrongInConfig);
 
                     const hasModuleData = m1Items.length > 0 || m2Items.length > 0;
 
@@ -333,37 +417,59 @@ export default function ParserPage() {
                         <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                           {idx + 1}
                         </span>
-                        <p className="text-sm text-foreground leading-relaxed flex-1">
+                        {aiFeedback[student.studentName] ? (
+                          <p className="text-sm text-foreground leading-relaxed flex-1">
+                            {aiFeedback[student.studentName]}
+                            <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full align-middle">
+                              <Sparkles className="w-2.5 h-2.5" />AI 润色
+                            </span>
+                          </p>
+                        ) : <p className="text-sm text-foreground leading-relaxed flex-1">
                           <span className="font-semibold">{student.studentName}</span>
                           {hasModuleData ? (
                             <>
                               {m1Items.length > 0 && (
                                 <>在 <span className="font-medium text-blue-600">Module 1</span> 错了{" "}
-                                <span className="font-bold text-rose-600">{m1Items.length}</span> 题，分别是
+                                <span className="font-bold text-rose-600">{m1Items.length}</span> 题，
+                                {m1Items.length === 1 ? "是" : "涉及"}
                                 <span className="text-blue-700">{m1Types.join("、")}</span></>
                               )}
-                              {m1Items.length > 0 && m2Items.length > 0 && "，"}
+                              {m1Items.length > 0 && m2Items.length > 0 && "；"}
                               {m2Items.length > 0 && (
                                 <><span className="font-medium text-indigo-600">Module 2</span> 错了{" "}
-                                <span className="font-bold text-rose-600">{m2Items.length}</span> 题，分别是
+                                <span className="font-bold text-rose-600">{m2Items.length}</span> 题，
+                                {m2Items.length === 1 ? "是" : "涉及"}
                                 <span className="text-indigo-700">{m2Types.join("、")}</span></>
                               )}
-                              {keyPoints.length > 0 ? (
-                                <>，注意
-                                {keyPoints.map((kp, i) => (
+                              {typeKeyPoints.length > 0 && (
+                                <>。<span className="text-muted-foreground">建议：</span>
+                                {typeKeyPoints.map(({ type, points }, i) => (
                                   <span key={i}>
-                                    <span className="text-violet-700 font-medium">{kp}</span>
-                                    {i < keyPoints.length - 1 && <span className="text-muted-foreground">、</span>}
+                                    {i > 0 && <span className="text-muted-foreground">；</span>}
+                                    <span className="text-blue-600 font-medium">{type}</span>
+                                    {points.length === 1 ? (
+                                      <>注意<span className="text-violet-700 font-medium">{points[0]}</span></>
+                                    ) : (
+                                      <>（共{points.length}道）：
+                                        {points.map((p, j) => (
+                                          <span key={j}>
+                                            {j > 0 && "，"}
+                                            第{j + 1}道注意<span className="text-violet-700 font-medium">{p}</span>
+                                          </span>
+                                        ))}
+                                      </>
+                                    )}
                                   </span>
-                                ))}</>
-                              ) : null}
+                                ))}
+                                </>
+                              )}
                             </>
                           ) : wrongInConfig.length > 0 ? (
                             <> 在配置范围内错了 <span className="font-bold text-rose-600">{wrongInConfig.length}</span> 题</>
                           ) : (
                             <span className="text-muted-foreground">在本次配置范围内未出现错题</span>
                           )}
-                        </p>
+                        </p>}
                       </motion.div>
                     );
                   })}
@@ -391,7 +497,7 @@ export default function ParserPage() {
                   <thead className="text-xs text-muted-foreground bg-muted/50 uppercase">
                     <tr>
                       <th className="px-5 py-3 font-medium">学生姓名</th>
-                      <th className="px-5 py-3 font-medium text-center">错题数</th>
+                          <th className="px-5 py-3 font-medium text-center">错题数</th>
                       <th className="px-5 py-3 font-medium">错题详情</th>
                     </tr>
                   </thead>
@@ -416,11 +522,13 @@ export default function ParserPage() {
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-medium text-xs ${
-                              student.wrongQuestions.length === 0
+                              countConfiguredWrongQuestions(student, mappings) === 0
                                 ? "bg-emerald-50 text-emerald-600"
                                 : "bg-rose-50 text-rose-600"
                             }`}>
-                              {student.wrongQuestions.length === 0 ? "全对 🎉" : `${student.wrongQuestions.length} 题`}
+                              {countConfiguredWrongQuestions(student, mappings) === 0
+                                ? "反馈范围 0 题"
+                                : `${countConfiguredWrongQuestions(student, mappings)} 题`}
                             </span>
                           </td>
                           <td className="px-5 py-3.5">
@@ -428,7 +536,7 @@ export default function ParserPage() {
                               {student.wrongQuestions.length === 0 ? (
                                 <span className="text-emerald-500 text-xs font-medium">—</span>
                               ) : (
-                                student.wrongQuestions.map((q) => {
+                                student.wrongQuestions.filter(q => getQuestionEntry(q)).map((q) => {
                                   const entry = getQuestionEntry(q);
                                   return (
                                     <span
@@ -451,6 +559,11 @@ export default function ParserPage() {
                                     </span>
                                   );
                                 })
+                              )}
+                              {student.wrongQuestions.length > countConfiguredWrongQuestions(student, mappings) && (
+                                <span className="text-[10px] text-muted-foreground self-center ml-1">
+                                  另有 {student.wrongQuestions.length - countConfiguredWrongQuestions(student, mappings)} 道未设反馈题
+                                </span>
                               )}
                             </div>
                           </td>

@@ -6,10 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./configSummary";
 export * from "./exportCsvRequest";
+export * from "./getQuestionTypesParams";
 export * from "./healthStatus";
+export * from "./listConfigsResponse";
 export * from "./parseExamRequest";
 export * from "./parseExamResponse";
+export * from "./polishedFeedback";
+export * from "./polishFeedbackRequest";
+export * from "./polishFeedbackResponse";
 export * from "./questionTypeEntry";
 export * from "./questionTypeMapping";
 export * from "./studentResult";

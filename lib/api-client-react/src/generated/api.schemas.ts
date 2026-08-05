@@ -48,6 +48,20 @@ export interface ListConfigsResponse {
   configs: ConfigSummary[];
 }
 
+export interface PolishFeedbackRequest {
+  students: StudentResult[];
+  questionTypeMappings: QuestionTypeEntry[];
+}
+
+export interface PolishedFeedback {
+  studentName: string;
+  feedback: string;
+}
+
+export interface PolishFeedbackResponse {
+  feedbacks: PolishedFeedback[];
+}
+
 export interface ExportCsvRequest {
   students: StudentResult[];
   questionTypeMappings?: QuestionTypeEntry[];
@@ -58,3 +72,7 @@ export interface SuccessResponse {
   success: boolean;
   message?: string;
 }
+
+export type GetQuestionTypesParams = {
+  name?: string;
+};

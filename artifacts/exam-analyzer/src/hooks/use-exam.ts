@@ -6,6 +6,7 @@ import {
   useListConfigs,
   useSaveQuestionTypes,
   useDeleteConfig,
+  usePolishFeedback,
   getGetQuestionTypesQueryKey,
   getListConfigsQueryKey,
 } from "@workspace/api-client-react";
@@ -20,8 +21,7 @@ export function useExamConfigs() {
 }
 
 export function useExamTypes(name?: string) {
-  return useGetQuestionTypes(name, {
-    query: { enabled: name !== undefined ? true : true }
+  return useGetQuestionTypes(name ? { name } : undefined, {
   });
 }
 
@@ -31,7 +31,7 @@ export function useSaveExamTypes() {
     mutation: {
       onSuccess: (_data, variables) => {
         queryClient.invalidateQueries({ queryKey: getListConfigsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetQuestionTypesQueryKey(variables.data.name) });
+        queryClient.invalidateQueries({ queryKey: getGetQuestionTypesQueryKey(variables.data.name ? { name: variables.data.name } : undefined) });
         queryClient.invalidateQueries({ queryKey: getGetQuestionTypesQueryKey() });
       }
     }
@@ -78,4 +78,8 @@ export function useCsvExport() {
     ...exportMutation,
     downloadCsv
   };
+}
+
+export function useFeedbackPolisher() {
+  return usePolishFeedback();
 }

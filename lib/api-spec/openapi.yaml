@@ -66,11 +66,36 @@ paths:
               schema:
                 type: string
 
+  /exam/polish-feedback:
+    post:
+      operationId: polishFeedback
+      tags: [exam]
+      summary: Polish student feedback with GLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolishFeedbackRequest"
+      responses:
+        "200":
+          description: Polished feedback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolishFeedbackResponse"
+
   /exam/question-types:
     get:
       operationId: getQuestionTypes
       tags: [exam]
       summary: Get saved question type mapping
+      parameters:
+        - in: query
+          name: name
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Question type mapping
@@ -91,6 +116,38 @@ paths:
       responses:
         "200":
           description: Saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /exam/question-types/configs:
+    get:
+      operationId: listConfigs
+      tags: [exam]
+      summary: List all saved configs
+      responses:
+        "200":
+          description: Saved configs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListConfigsResponse"
+
+  /exam/question-types/{name}:
+    delete:
+      operationId: deleteConfig
+      tags: [exam]
+      summary: Delete a saved config
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted successfully
           content:
             application/json:
               schema:
@@ -154,6 +211,10 @@ components:
           type: integer
         questionType:
           type: string
+        module:
+          type: string
+        keyPoint:
+          type: string
       required:
         - questionNumber
         - questionType
@@ -169,6 +230,55 @@ components:
           type: string
       required:
         - mappings
+
+    ConfigSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+      required: [name, count]
+
+    ListConfigsResponse:
+      type: object
+      properties:
+        configs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigSummary"
+      required: [configs]
+
+    PolishFeedbackRequest:
+      type: object
+      properties:
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentResult"
+        questionTypeMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionTypeEntry"
+      required: [students, questionTypeMappings]
+
+    PolishedFeedback:
+      type: object
+      properties:
+        studentName:
+          type: string
+        feedback:
+          type: string
+      required: [studentName, feedback]
+
+    PolishFeedbackResponse:
+      type: object
+      properties:
+        feedbacks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolishedFeedback"
+      required: [feedbacks]
 
     ExportCsvRequest:
       type: object
