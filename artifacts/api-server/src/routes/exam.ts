@@ -55,9 +55,9 @@ router.post("/polish-feedback", async (req, res) => {
     res.json({ feedbacks });
   } catch (err) {
     console.error("Feedback polish error:", err);
-    const missingKey = err instanceof Error && err.message.includes("ZHIPU_API_KEY");
+    const missingKey = err instanceof Error && err.message.includes("API key");
     res.status(missingKey ? 503 : 502).json({
-      error: missingKey ? "智谱 API Key 尚未配置" : "AI 润色暂时不可用",
+      error: missingKey ? "AI API Key 尚未配置" : "AI 润色暂时不可用",
     });
   }
 });
