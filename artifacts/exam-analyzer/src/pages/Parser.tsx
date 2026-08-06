@@ -136,6 +136,11 @@ function countConfiguredWrongQuestions(student: StudentResult, mappings: Questio
 
 const LS_DATA_KEY = "exam_parser_data";
 const LS_CONFIG_KEY = "exam_parser_config";
+const AI_BATCH_SIZE = 3;
+
+function wait(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function loadParsedData(): ParseExamResponse | null {
   try {
@@ -154,6 +159,8 @@ export default function ParserPage() {
   );
   const [copiedReport, setCopiedReport] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<Record<string, string>>({});
+  const [isPolishing, setIsPolishing] = useState(false);
+  const [polishProgress, setPolishProgress] = useState({ done: 0, total: 0 });
 
   // Persist parsed data across page navigation
   useEffect(() => {
@@ -201,6 +208,17 @@ export default function ParserPage() {
     );
   }, [parsedData, mappings]);
 
+  const feedbackEligibleStudents = useMemo(() => {
+    if (!parsedData) return [];
+    return parsedData.students.filter(
+      student => countConfiguredWrongQuestions(student, mappings) > 0,
+    );
+  }, [parsedData, mappings]);
+
+  const unfinishedFeedbackCount = feedbackEligibleStudents.filter(
+    student => !aiFeedback[student.studentName],
+  ).length;
+
   const handleParseJson = () => {
     if (!jsonInput.trim()) {
       toast({ title: "无内容", description: "请粘贴从书签工具复制的 JSON 数据", variant: "destructive" });
@@ -227,25 +245,59 @@ export default function ParserPage() {
   };
 
   const handlePolishFeedback = async () => {
-    if (!parsedData || mappings.length === 0) return;
+    if (!parsedData || mappings.length === 0 || isPolishing) return;
+
+    let targets = feedbackEligibleStudents.filter(
+      student => !aiFeedback[student.studentName],
+    );
+    // 全部完成后再次点击才表示重新生成；未完成时只补齐缺失学生。
+    if (targets.length === 0) {
+      targets = feedbackEligibleStudents;
+      setAiFeedback({});
+    }
+
+    if (targets.length === 0) return;
+    setIsPolishing(true);
+    setPolishProgress({ done: 0, total: targets.length });
+
+    const generated = new Set<string>();
     try {
-      const result = await polishService.mutateAsync({
-        data: { students: parsedData.students, questionTypeMappings: mappings },
-      });
-      const next = Object.fromEntries(
-        result.feedbacks.map(item => [item.studentName, item.feedback]),
-      );
-      setAiFeedback(next);
+      for (let offset = 0; offset < targets.length; offset += AI_BATCH_SIZE) {
+        let pending = targets.slice(offset, offset + AI_BATCH_SIZE);
+
+        // 每个小批次最多尝试两次；第二次只重试该批遗漏的学生。
+        for (let attempt = 0; attempt < 2 && pending.length > 0; attempt += 1) {
+          try {
+            const result = await polishService.mutateAsync({
+              data: { students: pending, questionTypeMappings: mappings },
+            });
+            const next = Object.fromEntries(
+              result.feedbacks.map(item => [item.studentName, item.feedback]),
+            );
+            if (result.feedbacks.length > 0) {
+              setAiFeedback(previous => ({ ...previous, ...next }));
+              result.feedbacks.forEach(item => generated.add(item.studentName));
+              setPolishProgress({ done: generated.size, total: targets.length });
+            }
+            pending = pending.filter(student => !next[student.studentName]);
+          } catch {
+            // 保留已成功批次，短暂等待后只重试当前失败批次。
+          }
+          if (pending.length > 0 && attempt === 0) await wait(900);
+        }
+        if (offset + AI_BATCH_SIZE < targets.length) await wait(350);
+      }
+
+      const failed = targets.length - generated.size;
       toast({
-        title: "AI 润色完成",
-        description: `已生成 ${result.feedbacks.length} 名学生的自然版反馈，其余继续使用模板反馈`,
+        title: failed === 0 ? "AI 润色完成" : "AI 润色部分完成",
+        description: failed === 0
+          ? `已生成 ${generated.size} 名学生的自然版反馈`
+          : `成功 ${generated.size} 人，剩余 ${failed} 人可再次点击继续补齐，已有结果不会丢失`,
+        variant: generated.size === 0 ? "destructive" : undefined,
       });
-    } catch {
-      toast({
-        title: "AI 润色失败",
-        description: "已保留原有模板反馈，请检查智谱 API Key 或稍后重试",
-        variant: "destructive",
-      });
+    } finally {
+      setIsPolishing(false);
     }
   };
 
@@ -398,13 +450,19 @@ export default function ParserPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handlePolishFeedback}
-                      disabled={polishService.isPending}
+                      disabled={isPolishing}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-60"
                     >
-                      {polishService.isPending ? (
-                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />正在润色…</>
+                      {isPolishing ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />正在润色 {polishProgress.done}/{polishProgress.total}</>
                       ) : (
-                        <><Sparkles className="w-3.5 h-3.5" />{Object.keys(aiFeedback).length ? "重新润色" : "使用 AI 润色"}</>
+                        <><Sparkles className="w-3.5 h-3.5" />
+                          {unfinishedFeedbackCount > 0 && Object.keys(aiFeedback).length > 0
+                            ? `继续润色（剩余 ${unfinishedFeedbackCount} 人）`
+                            : unfinishedFeedbackCount === 0 && feedbackEligibleStudents.length > 0
+                              ? "重新润色"
+                              : "使用 AI 润色"}
+                        </>
                       )}
                     </button>
                     <button
