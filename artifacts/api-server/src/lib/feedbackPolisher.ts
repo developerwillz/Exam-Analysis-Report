@@ -23,8 +23,16 @@ type PreparedStudent = {
 export type PolishedFeedback = { studentName: string; feedback: string };
 
 const ZHIPU_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-const GEMINI_ENDPOINT =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+
+function getGeminiModel(): string {
+  const configured = process.env.GEMINI_MODEL?.trim();
+  if (!configured) return DEFAULT_GEMINI_MODEL;
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(configured)) {
+    throw new Error("Invalid GEMINI_MODEL configuration");
+  }
+  return configured;
+}
 
 const SYSTEM_PROMPT = [
   "你是一名 SAT 阅读教师，只负责把结构化反馈预设整理成自然、具体的中文学习建议。",
@@ -134,7 +142,10 @@ async function polishWithGemini(
   input: PreparedStudent[],
   apiKey: string,
 ): Promise<PolishedFeedback[]> {
-  const response = await fetchWithTimeout(GEMINI_ENDPOINT, {
+  const model = getGeminiModel();
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const response = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -174,7 +185,7 @@ async function polishWithGemini(
 
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 500);
-    throw new Error(`Gemini API ${response.status}: ${detail}`);
+    throw new Error(`Gemini API ${response.status} (${model}): ${detail}`);
   }
 
   const payload = await response.json() as {
@@ -239,9 +250,12 @@ export async function polishFeedback(
   const completed: PolishedFeedback[] = [];
   if (geminiApiKey) {
     try {
+      const geminiModel = getGeminiModel();
       const geminiResults = await polishWithGemini(input, geminiApiKey);
       completed.push(...geminiResults);
-      console.info(`[feedback] Gemini accepted ${geminiResults.length}/${input.length}`);
+      console.info(
+        `[feedback] Gemini ${geminiModel} accepted ${geminiResults.length}/${input.length}`,
+      );
     } catch (error) {
       console.warn("Gemini feedback provider failed, falling back:", error);
     }

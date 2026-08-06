@@ -136,7 +136,7 @@ function countConfiguredWrongQuestions(student: StudentResult, mappings: Questio
 
 const LS_DATA_KEY = "exam_parser_data";
 const LS_CONFIG_KEY = "exam_parser_config";
-const AI_BATCH_SIZE = 3;
+const AI_BATCH_SIZE = 5;
 
 function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -263,27 +263,23 @@ export default function ParserPage() {
     const generated = new Set<string>();
     try {
       for (let offset = 0; offset < targets.length; offset += AI_BATCH_SIZE) {
-        let pending = targets.slice(offset, offset + AI_BATCH_SIZE);
+        const pending = targets.slice(offset, offset + AI_BATCH_SIZE);
 
-        // 每个小批次最多尝试两次；第二次只重试该批遗漏的学生。
-        for (let attempt = 0; attempt < 2 && pending.length > 0; attempt += 1) {
-          try {
-            const result = await polishService.mutateAsync({
-              data: { students: pending, questionTypeMappings: mappings },
-            });
-            const next = Object.fromEntries(
-              result.feedbacks.map(item => [item.studentName, item.feedback]),
-            );
-            if (result.feedbacks.length > 0) {
-              setAiFeedback(previous => ({ ...previous, ...next }));
-              result.feedbacks.forEach(item => generated.add(item.studentName));
-              setPolishProgress({ done: generated.size, total: targets.length });
-            }
-            pending = pending.filter(student => !next[student.studentName]);
-          } catch {
-            // 保留已成功批次，短暂等待后只重试当前失败批次。
+        // 后端已有 Gemini → 智谱兜底；前端不自动重试，避免重复消耗每日额度。
+        try {
+          const result = await polishService.mutateAsync({
+            data: { students: pending, questionTypeMappings: mappings },
+          });
+          const next = Object.fromEntries(
+            result.feedbacks.map(item => [item.studentName, item.feedback]),
+          );
+          if (result.feedbacks.length > 0) {
+            setAiFeedback(previous => ({ ...previous, ...next }));
+            result.feedbacks.forEach(item => generated.add(item.studentName));
+            setPolishProgress({ done: generated.size, total: targets.length });
           }
-          if (pending.length > 0 && attempt === 0) await wait(900);
+        } catch {
+          // 保留此前成功批次；用户再次点击时只补齐尚未生成的学生。
         }
         if (offset + AI_BATCH_SIZE < targets.length) await wait(350);
       }
