@@ -42,21 +42,43 @@ function buildTypeKeyPoints(
     if (kp) typeMap.get(type)!.push(kp);
   }
   return typeOrder
-    .map(type => ({ type, points: typeMap.get(type)! }))
+    .map(type => ({
+      type,
+      points: [...new Set(typeMap.get(type)!.map(point => cleanPreset(point, type)))],
+    }))
     .filter(({ points }) => points.length > 0);
 }
 
-/** 用于复制到剪贴板的纯文本句子。 */
-function buildAnalysisSentence(
+/** 清理预设中与模板重复的“题型”“注意”等前缀。 */
+function cleanPreset(point: string, type: string): string {
+  let result = point.trim();
+  const ordinalMatch = result.match(/^(第[一二三四五六七八九十百\d]+道)\s*/);
+  const ordinal = ordinalMatch?.[1] || "";
+  if (ordinalMatch) result = result.slice(ordinalMatch[0].length).trim();
+  if (result.startsWith(type)) result = result.slice(type.length).trim();
+  result = result.replace(/^(?:注意[：:、，,]?\s*)+/, "").trim();
+  if (!result) return point.trim();
+  return ordinal ? `${ordinal}：${result}` : result;
+}
+
+function getWrongInConfig(
   student: StudentResult,
   mappings: QuestionTypeEntry[]
-): string {
+): { q: number; entry: QuestionTypeEntry }[] {
   const configMap = new Map<number, QuestionTypeEntry>();
   for (const m of mappings) configMap.set(m.questionNumber, m);
 
-  const wrongInConfig = student.wrongQuestions
+  return student.wrongQuestions
     .map(q => ({ q, entry: configMap.get(q) }))
     .filter(({ entry }) => !!entry) as { q: number; entry: QuestionTypeEntry }[];
+}
+
+/** 姓名、Module、题数和题型完全由程序生成，AI 无权改写。 */
+function buildFactSentence(
+  student: StudentResult,
+  mappings: QuestionTypeEntry[]
+): string {
+  const wrongInConfig = getWrongInConfig(student, mappings);
 
   const m1Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 1");
   const m2Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
@@ -73,30 +95,36 @@ function buildAnalysisSentence(
     if (m2Items.length > 0) {
       const types = distinctTypes(m2Items);
       const connector = m2Items.length === 1 ? "是" : "涉及";
-      parts.push(`Module 2 错了 ${m2Items.length} 题，${connector}${types.join("、")}`);
+      const prefix = m1Items.length === 0 ? "在 " : "";
+      parts.push(`${prefix}Module 2 错了 ${m2Items.length} 题，${connector}${types.join("、")}`);
     }
     sentence += parts.join("；");
   } else if (wrongInConfig.length > 0) {
     sentence += `在配置范围内错了 ${wrongInConfig.length} 题`;
   } else {
     sentence += "在本次配置范围内未出现错题";
-    return sentence;
   }
 
-  // 按题型分组建议，同类多道题用"第1道/第2道"区分
+  return `${sentence}。`;
+}
+
+function buildTemplateSuggestion(
+  student: StudentResult,
+  mappings: QuestionTypeEntry[]
+): string {
+  const wrongInConfig = getWrongInConfig(student, mappings);
   const typeKeyPoints = buildTypeKeyPoints(wrongInConfig);
-  if (typeKeyPoints.length > 0) {
-    const tipParts = typeKeyPoints.map(({ type, points }) => {
-      if (points.length === 1) {
-        return `${type}注意${points[0]}`;
-      }
-      const numbered = points.map((p, i) => `第${i + 1}道注意${p}`).join("，");
-      return `${type}（共${points.length}道）：${numbered}`;
-    });
-    sentence += `。建议：${tipParts.join("；")}`;
-  }
+  if (typeKeyPoints.length === 0) return "";
 
-  return sentence;
+  const tipParts = typeKeyPoints.map(({ type, points }) =>
+    `${type}：${points.join("；")}`
+  );
+  return `建议：${tipParts.join("；")}。`;
+}
+
+/** 用于模板展示和复制的完整兜底反馈。 */
+function buildAnalysisSentence(student: StudentResult, mappings: QuestionTypeEntry[]): string {
+  return `${buildFactSentence(student, mappings)}${buildTemplateSuggestion(student, mappings)}`;
 }
 
 function countConfiguredWrongQuestions(student: StudentResult, mappings: QuestionTypeEntry[]): number {
@@ -159,9 +187,11 @@ export default function ParserPage() {
   const displayedReport = useMemo(() => {
     if (!parsedData) return [];
     return parsedData.students.map((student, index) =>
-      aiFeedback[student.studentName] || analysisReport[index] || ""
+      aiFeedback[student.studentName]
+        ? `${buildFactSentence(student, mappings)}${aiFeedback[student.studentName]}`
+        : analysisReport[index] || ""
     );
-  }, [parsedData, aiFeedback, analysisReport]);
+  }, [parsedData, mappings, aiFeedback, analysisReport]);
 
   const configuredWrongTotal = useMemo(() => {
     if (!parsedData) return 0;
@@ -391,21 +421,6 @@ export default function ParserPage() {
                 </div>
                 <div className="divide-y divide-border/40">
                   {parsedData.students.map((student, idx) => {
-                    const configMap = new Map<number, QuestionTypeEntry>();
-                    for (const m of mappings) configMap.set(m.questionNumber, m);
-
-                    const wrongInConfig = student.wrongQuestions
-                      .map(q => ({ q, entry: configMap.get(q) }))
-                      .filter(({ entry }) => !!entry) as { q: number; entry: QuestionTypeEntry }[];
-
-                    const m1Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 1");
-                    const m2Items = wrongInConfig.filter(({ entry }) => entry.module === "Module 2");
-                    const m1Types = distinctTypes(m1Items);
-                    const m2Types = distinctTypes(m2Items);
-                    const typeKeyPoints = buildTypeKeyPoints(wrongInConfig);
-
-                    const hasModuleData = m1Items.length > 0 || m2Items.length > 0;
-
                     return (
                       <motion.div
                         key={idx}
@@ -419,57 +434,17 @@ export default function ParserPage() {
                         </span>
                         {aiFeedback[student.studentName] ? (
                           <p className="text-sm text-foreground leading-relaxed flex-1">
+                            <span className="font-semibold">{buildFactSentence(student, mappings)}</span>
                             {aiFeedback[student.studentName]}
                             <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full align-middle">
                               <Sparkles className="w-2.5 h-2.5" />AI 润色
                             </span>
                           </p>
-                        ) : <p className="text-sm text-foreground leading-relaxed flex-1">
-                          <span className="font-semibold">{student.studentName}</span>
-                          {hasModuleData ? (
-                            <>
-                              {m1Items.length > 0 && (
-                                <>在 <span className="font-medium text-blue-600">Module 1</span> 错了{" "}
-                                <span className="font-bold text-rose-600">{m1Items.length}</span> 题，
-                                {m1Items.length === 1 ? "是" : "涉及"}
-                                <span className="text-blue-700">{m1Types.join("、")}</span></>
-                              )}
-                              {m1Items.length > 0 && m2Items.length > 0 && "；"}
-                              {m2Items.length > 0 && (
-                                <><span className="font-medium text-indigo-600">Module 2</span> 错了{" "}
-                                <span className="font-bold text-rose-600">{m2Items.length}</span> 题，
-                                {m2Items.length === 1 ? "是" : "涉及"}
-                                <span className="text-indigo-700">{m2Types.join("、")}</span></>
-                              )}
-                              {typeKeyPoints.length > 0 && (
-                                <>。<span className="text-muted-foreground">建议：</span>
-                                {typeKeyPoints.map(({ type, points }, i) => (
-                                  <span key={i}>
-                                    {i > 0 && <span className="text-muted-foreground">；</span>}
-                                    <span className="text-blue-600 font-medium">{type}</span>
-                                    {points.length === 1 ? (
-                                      <>注意<span className="text-violet-700 font-medium">{points[0]}</span></>
-                                    ) : (
-                                      <>（共{points.length}道）：
-                                        {points.map((p, j) => (
-                                          <span key={j}>
-                                            {j > 0 && "，"}
-                                            第{j + 1}道注意<span className="text-violet-700 font-medium">{p}</span>
-                                          </span>
-                                        ))}
-                                      </>
-                                    )}
-                                  </span>
-                                ))}
-                                </>
-                              )}
-                            </>
-                          ) : wrongInConfig.length > 0 ? (
-                            <> 在配置范围内错了 <span className="font-bold text-rose-600">{wrongInConfig.length}</span> 题</>
-                          ) : (
-                            <span className="text-muted-foreground">在本次配置范围内未出现错题</span>
-                          )}
-                        </p>}
+                        ) : (
+                          <p className="text-sm text-foreground leading-relaxed flex-1">
+                            {buildAnalysisSentence(student, mappings)}
+                          </p>
+                        )}
                       </motion.div>
                     );
                   })}
