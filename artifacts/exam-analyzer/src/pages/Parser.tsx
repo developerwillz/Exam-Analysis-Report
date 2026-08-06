@@ -311,7 +311,7 @@ export default function ParserPage() {
   };
 
   const handleCopyReport = async () => {
-    const text = displayedReport.join("\n");
+    const text = displayedReport.join("\n\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopiedReport(true);
