@@ -265,7 +265,7 @@ export default function ParserPage() {
       for (let offset = 0; offset < targets.length; offset += AI_BATCH_SIZE) {
         const pending = targets.slice(offset, offset + AI_BATCH_SIZE);
 
-        // 后端已有 Gemini → 智谱兜底；前端不自动重试，避免重复消耗每日额度。
+        // 后端已有 DeepSeek → 智谱兜底；前端不自动重试，避免重复请求。
         try {
           const result = await polishService.mutateAsync({
             data: { students: pending, questionTypeMappings: mappings },

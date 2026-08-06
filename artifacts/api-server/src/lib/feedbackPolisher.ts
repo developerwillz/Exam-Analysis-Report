@@ -23,13 +23,14 @@ type PreparedStudent = {
 export type PolishedFeedback = { studentName: string; feedback: string };
 
 const ZHIPU_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions";
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 
-function getGeminiModel(): string {
-  const configured = process.env.GEMINI_MODEL?.trim();
-  if (!configured) return DEFAULT_GEMINI_MODEL;
+function getDeepSeekModel(): string {
+  const configured = process.env.DEEPSEEK_MODEL?.trim();
+  if (!configured) return DEFAULT_DEEPSEEK_MODEL;
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(configured)) {
-    throw new Error("Invalid GEMINI_MODEL configuration");
+    throw new Error("Invalid DEEPSEEK_MODEL configuration");
   }
   return configured;
 }
@@ -138,63 +139,40 @@ async function fetchWithTimeout(
   }
 }
 
-async function polishWithGemini(
+async function polishWithDeepSeek(
   input: PreparedStudent[],
   apiKey: string,
 ): Promise<PolishedFeedback[]> {
-  const model = getGeminiModel();
-  const endpoint =
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const response = await fetchWithTimeout(endpoint, {
+  const model = getDeepSeekModel();
+  const response = await fetchWithTimeout(DEEPSEEK_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{
-        role: "user",
-        parts: [{ text: JSON.stringify(modelInput(input)) }],
-      }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 4096,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            feedbacks: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  studentId: { type: "STRING" },
-                  feedback: { type: "STRING" },
-                  coveredPresetIds: { type: "ARRAY", items: { type: "STRING" } },
-                },
-                required: ["studentId", "feedback", "coveredPresetIds"],
-              },
-            },
-          },
-          required: ["feedbacks"],
-        },
-      },
+      model,
+      thinking: { type: "disabled" },
+      temperature: 0.2,
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: JSON.stringify(modelInput(input)) },
+      ],
     }),
   });
 
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 500);
-    throw new Error(`Gemini API ${response.status} (${model}): ${detail}`);
+    throw new Error(`DeepSeek API ${response.status} (${model}): ${detail}`);
   }
 
   const payload = await response.json() as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    choices?: Array<{ message?: { content?: string } }>;
   };
-  const content = payload.candidates?.[0]?.content?.parts
-    ?.map(part => part.text || "")
-    .join("");
-  if (!content) throw new Error("Gemini API returned empty content");
+  const content = payload.choices?.[0]?.message?.content;
+  if (!content) throw new Error("DeepSeek API returned empty content");
   return validateFeedbacks(content, input);
 }
 
@@ -238,9 +216,9 @@ export async function polishFeedback(
   students: Student[],
   mappings: Mapping[],
 ): Promise<PolishedFeedback[]> {
-  const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+  const deepSeekApiKey = process.env.DEEPSEEK_API_KEY?.trim();
   const zhipuApiKey = process.env.ZHIPU_API_KEY?.trim();
-  if (!geminiApiKey && !zhipuApiKey) {
+  if (!deepSeekApiKey && !zhipuApiKey) {
     throw new Error("No AI API key is configured");
   }
 
@@ -248,16 +226,16 @@ export async function polishFeedback(
   if (input.length === 0) return [];
 
   const completed: PolishedFeedback[] = [];
-  if (geminiApiKey) {
+  if (deepSeekApiKey) {
     try {
-      const geminiModel = getGeminiModel();
-      const geminiResults = await polishWithGemini(input, geminiApiKey);
-      completed.push(...geminiResults);
+      const deepSeekModel = getDeepSeekModel();
+      const deepSeekResults = await polishWithDeepSeek(input, deepSeekApiKey);
+      completed.push(...deepSeekResults);
       console.info(
-        `[feedback] Gemini ${geminiModel} accepted ${geminiResults.length}/${input.length}`,
+        `[feedback] DeepSeek ${deepSeekModel} accepted ${deepSeekResults.length}/${input.length}`,
       );
     } catch (error) {
-      console.warn("Gemini feedback provider failed, falling back:", error);
+      console.warn("DeepSeek feedback provider failed, falling back:", error);
     }
   }
 

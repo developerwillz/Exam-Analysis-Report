@@ -47,7 +47,7 @@ router.post("/export-csv", (req, res) => {
   }
 });
 
-// POST /api/exam/polish-feedback — only configured question numbers are sent to GLM
+// POST /api/exam/polish-feedback — only configured question numbers are sent to AI providers
 router.post("/polish-feedback", async (req, res) => {
   try {
     const body = PolishFeedbackBody.parse(req.body);
