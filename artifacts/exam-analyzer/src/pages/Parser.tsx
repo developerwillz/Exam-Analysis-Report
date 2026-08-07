@@ -122,9 +122,20 @@ function buildTemplateSuggestion(
   return `建议：${tipParts.join("；")}。`;
 }
 
+/** 按已配置的阅读题错题数生成稳定的结尾鼓励语。 */
+function buildEncouragement(
+  student: StudentResult,
+  mappings: QuestionTypeEntry[]
+): string {
+  const wrongCount = getWrongInConfig(student, mappings).length;
+  if (wrongCount === 0) return "阅读部分表现非常出色，继续保持！";
+  if (wrongCount <= 5) return "阅读部分整体表现很不错，继续保持这份细心和稳定！";
+  return "继续保持耐心，针对这些题型逐步巩固，相信你会取得更大进步！";
+}
+
 /** 用于模板展示和复制的完整兜底反馈。 */
 function buildAnalysisSentence(student: StudentResult, mappings: QuestionTypeEntry[]): string {
-  return `${buildFactSentence(student, mappings)}${buildTemplateSuggestion(student, mappings)}`;
+  return `${buildFactSentence(student, mappings)}${buildTemplateSuggestion(student, mappings)}${buildEncouragement(student, mappings)}`;
 }
 
 function countConfiguredWrongQuestions(student: StudentResult, mappings: QuestionTypeEntry[]): number {
@@ -195,7 +206,7 @@ export default function ParserPage() {
     if (!parsedData) return [];
     return parsedData.students.map((student, index) =>
       aiFeedback[student.studentName]
-        ? `${buildFactSentence(student, mappings)}${aiFeedback[student.studentName]}`
+        ? `${buildFactSentence(student, mappings)}${aiFeedback[student.studentName]}${buildEncouragement(student, mappings)}`
         : analysisReport[index] || ""
     );
   }, [parsedData, mappings, aiFeedback, analysisReport]);
