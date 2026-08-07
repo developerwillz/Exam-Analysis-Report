@@ -122,20 +122,73 @@ function buildTemplateSuggestion(
   return `建议：${tipParts.join("；")}。`;
 }
 
-/** 按已配置的阅读题错题数生成稳定的结尾鼓励语。 */
+const PERFECT_ENCOURAGEMENTS = [
+  "阅读部分表现非常出色，继续保持！",
+  "本次阅读部分完成得非常好，期待继续保持稳定发挥！",
+  "阅读部分表现亮眼，认真细致的状态值得保持！",
+  "本次阅读发挥十分出色，继续保持这份专注！",
+  "阅读部分完成度很高，希望继续保持良好状态！",
+  "本次阅读表现值得表扬，继续稳步向前！",
+];
+
+const STRONG_ENCOURAGEMENTS = [
+  "阅读部分整体表现很不错，继续保持这份细心和稳定！",
+  "本次阅读发挥得很好，保持现在的节奏，继续加油！",
+  "阅读部分完成度较高，继续保持认真细致的答题状态！",
+  "整体表现值得肯定，希望继续保持稳定发挥！",
+  "本次阅读表现不错，巩固好易错点后还会更加出色！",
+  "阅读部分基础掌握得很好，继续保持专注和耐心！",
+  "这次阅读发挥较为稳定，继续保持良好的解题节奏！",
+  "阅读部分整体完成得不错，期待下一次更加出色！",
+  "本次阅读表现值得表扬，保持细致，继续稳步提升！",
+  "阅读部分展现了不错的掌握度，继续保持这份状态！",
+  "整体阅读表现良好，认真总结后一定还能更进一步！",
+  "本次阅读完成情况不错，继续保持稳定和细心！",
+];
+
+const PROGRESS_ENCOURAGEMENTS = [
+  "继续保持耐心，针对这些题型逐步巩固，相信你会取得更大进步！",
+  "认真梳理本次易错点并逐一突破，相信下一次会有明显进步！",
+  "保持现在的学习节奏，把薄弱题型逐步练扎实，继续加油！",
+  "每一次复盘都在为进步积累力量，坚持练习一定会有收获！",
+  "针对重点题型耐心总结方法，相信你的表现会越来越稳定！",
+  "把本次错题转化为经验，稳步巩固，下一次一定会更好！",
+  "继续保持认真投入的状态，逐项突破后会看到更大的提升！",
+  "耐心复盘并强化方法，阅读能力会在积累中稳步提高！",
+  "从本次易错点出发有针对性地练习，相信进步很快就会出现！",
+  "保持信心，把每类问题逐步解决，期待下一次更好的发挥！",
+  "认真消化本次反馈并持续练习，你会越来越从容和稳定！",
+  "继续按题型查漏补缺，坚持下去一定能取得更好的表现！",
+];
+
+function stableEncouragementIndex(studentName: string, position: number, size: number): number {
+  let hash = position;
+  for (const character of studentName) hash = (hash * 31 + character.codePointAt(0)!) >>> 0;
+  return hash % size;
+}
+
+/** 按已配置的阅读题错题数生成稳定且尽量不重复的结尾鼓励语。 */
 function buildEncouragement(
   student: StudentResult,
-  mappings: QuestionTypeEntry[]
+  mappings: QuestionTypeEntry[],
+  position: number,
 ): string {
   const wrongCount = getWrongInConfig(student, mappings).length;
-  if (wrongCount === 0) return "阅读部分表现非常出色，继续保持！";
-  if (wrongCount <= 5) return "阅读部分整体表现很不错，继续保持这份细心和稳定！";
-  return "继续保持耐心，针对这些题型逐步巩固，相信你会取得更大进步！";
+  const options = wrongCount === 0
+    ? PERFECT_ENCOURAGEMENTS
+    : wrongCount <= 6
+      ? STRONG_ENCOURAGEMENTS
+      : PROGRESS_ENCOURAGEMENTS;
+  return options[stableEncouragementIndex(student.studentName, position, options.length)];
 }
 
 /** 用于模板展示和复制的完整兜底反馈。 */
-function buildAnalysisSentence(student: StudentResult, mappings: QuestionTypeEntry[]): string {
-  return `${buildFactSentence(student, mappings)}${buildTemplateSuggestion(student, mappings)}${buildEncouragement(student, mappings)}`;
+function buildAnalysisSentence(
+  student: StudentResult,
+  mappings: QuestionTypeEntry[],
+  position: number,
+): string {
+  return `${buildFactSentence(student, mappings)}${buildTemplateSuggestion(student, mappings)}${buildEncouragement(student, mappings, position)}`;
 }
 
 function countConfiguredWrongQuestions(student: StudentResult, mappings: QuestionTypeEntry[]): number {
@@ -199,14 +252,16 @@ export default function ParserPage() {
   // Build analysis report for all students
   const analysisReport = useMemo(() => {
     if (!parsedData || mappings.length === 0) return [];
-    return parsedData.students.map(s => buildAnalysisSentence(s, mappings));
+    return parsedData.students.map((student, index) =>
+      buildAnalysisSentence(student, mappings, index)
+    );
   }, [parsedData, mappings]);
 
   const displayedReport = useMemo(() => {
     if (!parsedData) return [];
     return parsedData.students.map((student, index) =>
       aiFeedback[student.studentName]
-        ? `${buildFactSentence(student, mappings)}${aiFeedback[student.studentName]}${buildEncouragement(student, mappings)}`
+        ? `${buildFactSentence(student, mappings)}${aiFeedback[student.studentName]}${buildEncouragement(student, mappings, index)}`
         : analysisReport[index] || ""
     );
   }, [parsedData, mappings, aiFeedback, analysisReport]);
@@ -501,13 +556,14 @@ export default function ParserPage() {
                           <p className="text-sm text-foreground leading-relaxed flex-1">
                             <span className="font-semibold">{buildFactSentence(student, mappings)}</span>
                             {aiFeedback[student.studentName]}
+                            {buildEncouragement(student, mappings, idx)}
                             <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full align-middle">
                               <Sparkles className="w-2.5 h-2.5" />AI 润色
                             </span>
                           </p>
                         ) : (
                           <p className="text-sm text-foreground leading-relaxed flex-1">
-                            {buildAnalysisSentence(student, mappings)}
+                            {buildAnalysisSentence(student, mappings, idx)}
                           </p>
                         )}
                       </motion.div>
